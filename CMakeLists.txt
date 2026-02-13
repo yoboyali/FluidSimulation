@@ -8,7 +8,9 @@ find_package(OpenGL REQUIRED)
 
 find_library(GLUT_LIBRARY glut PATHS /opt/homebrew/lib REQUIRED)
 
-add_executable(FluidSimulation main.cpp)
+add_executable(FluidSimulation main.cpp
+        WaterSimulator.cpp
+        WaterSimulator.h)
 
 target_include_directories(FluidSimulation PRIVATE /opt/homebrew/include)
 
