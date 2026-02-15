@@ -4,29 +4,39 @@
 
 #include "WaterSimulator.h"
 
+vector2 positions[Numofparticles] = {0};
+vector2 velocities[Numofparticles] = {0};
+
+vector2 operator-(vector2 x , vector2 y)
+{
+    return (vector2){x.x - y.x , x.y - y.y};
+}
 
 void WaterSimulator::RenderScene()
 {
-
-
-    static GLdouble x = 0.0;
-    static GLdouble y = 0.0;
-    static double t = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
-
-    GLdouble u = -(x - 0.5 * cos(t * t) * cos(t));
-    GLdouble v = -(y - 0.5 * cos(t * t) * sin(t));
-
-    double t_plus_dt = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
-    double dt = t_plus_dt - t;
-
-    x += dt * u;  // x(t + dt) = x(t) + dt * u(x, y, z, t)
-    y += dt * v;
-
-    t = t_plus_dt;
     SetColor();
-    DrawSphere(x , y ,0.0);
 
+    double t = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+    for (int i = 0 ; i < Numofparticles ; i++) {
+        double dt = 0;
+        velocities[i].y +=  down * gravity * dt;
+        CheckCollision(positions[i].y , velocities[i].y , i);
+        positions[i].y += velocities[i].y * dt;
+      //  std::cout<<"Velocity after: "<<velocities[i].y<<" at index: "<<0<<std::endl;
+        DrawSphere(positions[i].x , positions[i].y , 0.0);
+
+
+    }
     glutSwapBuffers();
+    SetColor();
+    double temp =  CalculateDensity(positions[150]);
+    std::cout<<"Calculated density: "<<temp<<std::endl;
+    glPushMatrix();
+    glTranslated(positions[170].x , positions[170].y , 0);
+    glutWireSphere(smoothingradius , 50 , 50);
+    glPopMatrix();
+        t2 = t;
+
 }
 
 void WaterSimulator::SetColor()
@@ -44,8 +54,9 @@ void WaterSimulator::SetMaterialColor(const GLfloat material_color[4])
 void WaterSimulator::DrawSphere(GLdouble x , GLdouble y , GLdouble z)
 {
     glPushMatrix();
+   // std::cout<<"Final Position: "<<y<<std::endl;
     glTranslated(x , y , z);
-    const GLdouble kRadius = 0.1  ;
+    const GLdouble kRadius = radius  ;
     const GLint kLongitudeSlices = 50;
     const GLint kLatitudeStacks = 50;
     glutSolidSphere(kRadius, kLongitudeSlices, kLatitudeStacks);
@@ -57,10 +68,54 @@ void WaterSimulator::CalculateVelocities()
 {
 }
 
-void WaterSimulator::CalculateDensity()
+double WaterSimulator::CalculateDensity(vector2 samplepoint)
+{
+    double density = 0.0;
+    const double mass = 1.0;
+
+    for (int i = 0 ; i < Numofparticles ; i++) {
+        double dst = magnitude(positions[i] - samplepoint);
+        double influence = SmoothingKernel(smoothingradius , dst);
+        density += mass * influence;
+    }
+    return density;
+}
+
+double WaterSimulator::SmoothingKernel(double smoothingradius , double dst)
+{
+    double volume = M_PI * pow(smoothingradius ,8) / 4;
+    double value = 0 > smoothingradius *smoothingradius - dst * dst ? 0 : smoothingradius * smoothingradius - dst * dst;
+    return value * value * value / volume;
+}
+
+void WaterSimulator::CheckCollision(double y , double velocity , int index)
+{
+        double border = 1 - radius;
+        if (y <= -border) {
+            positions[index].y = -border;
+            velocities[index].y *= -1 * damping;
+          //  std::cout<<"collision index:"<<index<<std::endl;
+        }
+        if (y >= border) {
+            positions[index].y = border;
+            velocities[index].y *= -1 * damping;
+    }
+
+}
+
+void WaterSimulator::start()
 {
 }
 
-void WaterSimulator::SmoothingKernel()
+WaterSimulator::WaterSimulator()
 {
+    int ParticlesperRow = (int)sqrt(Numofparticles);
+    int ParticlesperCol = (Numofparticles - 1) / ParticlesperRow + 1;
+    float spacing = radius * 2 + particlespacing;
+    for (int i = 0 ; i < Numofparticles ; i++) {
+        float x = ((i % ParticlesperRow - ParticlesperRow / 2 + 0.5) * spacing) / 10;
+        float y = ((i / ParticlesperRow - ParticlesperCol / 2 + 0.5) * spacing) / 10;
+      //  std::cout<<"x: "<<x<<" y: "<<y<<std::endl;
+        positions[i] = (vector2){x ,y};
+    }
 }

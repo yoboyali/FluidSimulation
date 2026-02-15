@@ -5,6 +5,7 @@
 #include "WaterSimulator.h"
 #define WindowWidth 1500
 #define WindowHeight 1000
+WaterSimulator simulator;
 
 void SetBackgroundColor() {
   const GLclampf kClearRed = 0.0f;
@@ -29,7 +30,7 @@ void TurnOnLight() {
   const GLfloat kAmbient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
   const GLfloat kDiffuse[4] = {0.4f, 0.4f, 0.4f, 1.0f};
   const GLfloat kSpecular[4] = {0.7f, 0.7f, 0.7f, 1.0f};
-  const GLfloat kPosition[4] = {1.0f, 1.0f, 0.5f, 1.0f};
+  const GLfloat kPosition[4] = {0.0f, 0.0f, 0.5f, 1.0f};
   glLightfv(GL_LIGHT0, GL_AMBIENT, kAmbient);
   glLightfv(GL_LIGHT0, GL_DIFFUSE, kDiffuse);
   glLightfv(GL_LIGHT0, GL_SPECULAR, kSpecular);
@@ -40,7 +41,6 @@ void TurnOnLight() {
 void Scene()
 {
 
-  WaterSimulator simulator;
   DrawBackground();
   TurnOnLight();
   simulator.RenderScene();
