@@ -7,7 +7,7 @@
 #include <GL/freeglut.h>
 #include <iostream>
 #include <random>
-#define Numofparticles 300
+#define Numofparticles 400
 
 struct vector2
 {
@@ -25,19 +25,22 @@ public: void RenderScene();
     double CalculateDensity(vector2 samplepoint);
     double SmoothingKernel(double smoothingradius , double dst);
     double SmoothingKernelDerivative(float smoothingradius , double dst);
-    void CheckCollision(double y , double velocity , int index);
+    void CheckCollision(vector2 position , int index);
     void start();
-    double calculateProperty(vector2 samplepoint);
-    vector2 calculatePropertyGradient(vector2 samplepoint);
+    void updateDensities();
+    vector2 calculatePressureForce(int index);
+    float ConvertDensityToPressure(double density);
+    float CalculateSharedPressure(float densityA , float DensityB);
     double magnitude(vector2 a)
     {
         return sqrt((a.x * a.x) + (a.y * a.y));
     }
     WaterSimulator();
     void drawarrow(vector2 start , vector2 end);
-    float ExampleFunction(vector2 pos);
-    double radius= 0.01 , gravity = 00.0 , down = -1.0 , damping = 0.5 , particlespacing = 0.5 , smoothingradius = 0.2;
+    double radius= 0.01 , gravity = 0.0 , down = -1.0 , damping = 0.1 , particlespacing = 0.01 , smoothingradius = 0.02 , mass = 1.0;
     double t2 = 0;
+    double targetDensity = 0.04;
+    double pressureMultiplier = 0.70;
 
 };
 
