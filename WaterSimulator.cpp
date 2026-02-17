@@ -45,7 +45,9 @@ void WaterSimulator::RenderScene()
 
     double t = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
     double dt = t - t2;
-
+    // Cap the time step for stability
+    const double maxDt = 0.005; // 5ms maximum
+    if (dt > maxDt) dt = maxDt;
     for (int i = 0 ; i < Numofparticles ; i++) {
         vector2 Pressure =calculatePressureForce(i);
         vector2 PressureAcc = Pressure / densities[i];
@@ -96,7 +98,6 @@ void WaterSimulator::CalculateVelocities()
 double WaterSimulator::CalculateDensity(vector2 samplepoint)
 {
     double density = 0.0;
-    const double mass = 1.0;
 
     for (int i = 0 ; i < Numofparticles ; i++) {
 
@@ -114,15 +115,13 @@ double WaterSimulator::SmoothingKernel(double smoothingradius , double dst)
     double value = 0 > smoothingradius *smoothingradius - dst * dst ? 0 : smoothingradius * smoothingradius - dst * dst;
     return value * value * value / volume;
 }
-
 double WaterSimulator::SmoothingKernelDerivative(float smoothingradius, double dst)
 {
-    if (dst >= smoothingradius){return 0.0;}
-    float f = smoothingradius * smoothingradius - dst * dst;
-    float scale = -24.0 / (M_PI * pow(smoothingradius , 8.0));
-   // std::cout<<"scale: "<<scale * dst * f * f<<std::endl;
-    return scale * dst * f * f;
-
+    if (dst >= smoothingradius || dst < 0.0001) return 0.0;
+    float h = smoothingradius;
+    float r = dst;
+    float volume = M_PI * pow(h, 8.0) / 4.0;
+    return -6.0 * r * pow(h*h - r*r, 2.0) / volume;
 }
 
 void WaterSimulator::CheckCollision(vector2 pos ,int index)
@@ -162,26 +161,29 @@ void WaterSimulator::updateDensities()
 
 vector2 WaterSimulator::calculatePressureForce(int index)
 {
-    std::default_random_engine gen;
-    std::uniform_real_distribution<double> distribution(-0.9,
-                                                   0.9);
-  vector2 PressureForce = {0,0};
-    float mass = 1;
-    for (int i = 0 ; i < Numofparticles ; i++) {
-        if (positions[i] == positions[index]){continue;}
-        vector2 offset = positions[i] - positions[index];
+    vector2 PressureForce = {0,0};
+    float mass = 1.0;
+
+    for (int i = 0; i < Numofparticles; i++) {
+        if (i == index) continue;
+
+        vector2 offset = positions[index] - positions[i];
         double dst = magnitude(offset);
+        if (dst < 0.0001) continue; // Avoid division by zero
+
         vector2 dir = offset / dst;
+        float slope = SmoothingKernelDerivative(smoothingradius, dst);
 
-        float slope = SmoothingKernelDerivative(smoothingradius , dst);
-        float density = densities[i];
-        float sharedPressure = CalculateSharedPressure(density , densities[index]);
-        //std::cout<<"Slope: "<<slope<<" density: "<<density<<std::endl;
-        PressureForce =  (( dir * sharedPressure  * slope * mass /density) + PressureForce);
+        float pressure_i = ConvertDensityToPressure(densities[index]);
+        float pressure_j = ConvertDensityToPressure(densities[i]);
+
+        // SPH pressure force formula
+        float pressure_term = (pressure_i / (densities[index] * densities[index]) +
+                               pressure_j / (densities[i] * densities[i]));
+
+        PressureForce = PressureForce - dir * mass * mass * pressure_term * slope;
     }
-  //  std::cout<<"End of arrow x: "<<Gradient.x<<" y: "<<Gradient.y<<std::endl;
-
-    return  PressureForce * -1;
+    return PressureForce;
 }
 
 float WaterSimulator::ConvertDensityToPressure(double density)
@@ -212,7 +214,7 @@ WaterSimulator::WaterSimulator()
     for (int i = 0 ; i < Numofparticles ; i++) {
 
         //float x = xdistribution(gen);
-       // float y = ydistribution(gen);
+        //float y = ydistribution(gen);
         float x = ((i % ParticlesperRow - ParticlesperRow / 2 + 0.5) * spacing) / 10;
         float y = ((i / ParticlesperRow - ParticlesperCol / 2 + 0.5) * spacing) / 10;
       //  std::cout<<"x: "<<x<<" y: "<<y<<std::endl;
@@ -221,27 +223,6 @@ WaterSimulator::WaterSimulator()
     }
 }
 
-void WaterSimulator::drawarrow(vector2 start, vector2 end)
-{
-    glBegin(GL_LINES);
-    end = start + end * 0.1;
-    glVertex2f(start.x, start.y);
-    glVertex2f(end.x, end.y);
-    glEnd();
-    //std::cout<<"Start of arrow x: "<<start.x<<" y: "<<start.y<<std::endl;
-    //std::cout<<"End of arrow x: "<<end.x<<" y: "<<end.y<<std::endl;
-
-    // Calculate angle for the arrowhead
-    float angle = atan2(end.y - start.y, end.x - start.x);
-    float headSize = 0.05f; // Size of arrow head
-
-    // Draw the arrowhead (triangle)
-    glBegin(GL_TRIANGLES);
-    glVertex2f(end.x, end.y); // Point of the arrow
-    glVertex2f(end.x - headSize * cos(angle - 0.5), end.y - headSize * sin(angle - 0.5));
-    glVertex2f(end.x - headSize * cos(angle + 0.5), end.y - headSize * sin(angle + 0.5));
-    glEnd();
-}
 
 
 
