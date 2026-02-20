@@ -30,12 +30,16 @@ void WaterSimulator::RenderScene()
         positions[i] = (velocities[i] * dt) + positions[i];
         CheckCollision(positions[i] , i);
         DrawSphere(positions[i].x , positions[i].y , 0.9);
-      //  drawarrow(positions[i] , pos);
 
     }
     glutSwapBuffers();
     t2 = t;
 
+}
+
+WaterSimulator::~WaterSimulator()
+{
+    delete spatialHash;
 }
 
 void WaterSimulator::SetColor()
@@ -67,16 +71,18 @@ void WaterSimulator::CalculateVelocities()
 {
 }
 
-double WaterSimulator::CalculateDensity(vector2 samplepoint)
+double WaterSimulator::CalculateDensity(int index)
 {
     double density = 0.0;
 
-    for (int i = 0 ; i < Numofparticles ; i++) {
+    spatialHash->query(positions, index, smoothingradius);
 
-        double dst = magnitude(positions[i] - samplepoint);
-        double influence = SmoothingKernel(smoothingradius , dst);
+    for (int j = 0; j < spatialHash->querySize; j++) {
+        int neighborIndex = spatialHash->queryIds[j];
+
+        double dst = magnitude(positions[index] - positions[neighborIndex]);
+        double influence = SmoothingKernel(smoothingradius, dst);
         density += mass * influence;
-
     }
     return density;
 }
@@ -124,8 +130,9 @@ void WaterSimulator::start()
 
 void WaterSimulator::updateDensities()
 {
+    spatialHash->create(positions , Numofparticles);
     for (int i = 0; i < Numofparticles ; i++) {
-        densities[i] = CalculateDensity(positions[i]);
+        densities[i] = CalculateDensity(i);
     }
 }
 
@@ -133,11 +140,12 @@ vector2 WaterSimulator::calculatePressureForce(int index)
 {
     vector2 PressureForce = {0,0};
     float mass = 1.0;
+    spatialHash->query(positions, index, smoothingradius);
 
-    for (int i = 0; i < Numofparticles; i++) {
-        if (i == index) continue;
-
-        vector2 offset = positions[index] - positions[i];
+    for (int i = 0; i < spatialHash->querySize ; i++) {
+        int neighborIndex = spatialHash->queryIds[i];
+        if (neighborIndex == index) continue;
+        vector2 offset = positions[index] - positions[neighborIndex];
         double dst = magnitude(offset);
         if (dst < 0.0001) continue; // Avoid division by zero
 
@@ -145,11 +153,11 @@ vector2 WaterSimulator::calculatePressureForce(int index)
         float slope = SmoothingKernelDerivative(smoothingradius, dst);
 
         float pressure_i = ConvertDensityToPressure(densities[index]);
-        float pressure_j = ConvertDensityToPressure(densities[i]);
+        float pressure_j = ConvertDensityToPressure(densities[neighborIndex]);
 
         // SPH pressure force formula
         float pressure_term = (pressure_i / (densities[index] * densities[index]) +
-                               pressure_j / (densities[i] * densities[i]));
+                               pressure_j / (densities[neighborIndex] * densities[neighborIndex]));
 
         PressureForce = PressureForce - dir * mass * mass * pressure_term * slope;
     }
@@ -170,29 +178,26 @@ float WaterSimulator::CalculateSharedPressure(float densityA, float densityB)
     return (pressureA + pressureB) / 2;
 }
 
+
+
 WaterSimulator::WaterSimulator()
 {
-    int ParticlesperRow = (int)sqrt(Numofparticles);
+    int ParticlesperRow = (int) sqrt(Numofparticles);
     int ParticlesperCol = (Numofparticles - 1) / ParticlesperRow + 1;
     float spacing = radius * 2 + particlespacing;
-
+    spatialHash = new SpatialHash(smoothingradius, Numofparticles);
     std::default_random_engine gen;
     std::uniform_real_distribution<double> xdistribution(-0.9,
-                                                   0.9);
+                                                         0.9);
     std::uniform_real_distribution<double> ydistribution(-0.9,
-                                                  0.9);
-    for (int i = 0 ; i < Numofparticles ; i++) {
-
+                                                         0.9);
+    for (int i = 0; i < Numofparticles; i++) {
         //float x = xdistribution(gen);
         //float y = ydistribution(gen);
         float x = ((i % ParticlesperRow - ParticlesperRow / 2 + 0.5) * spacing) / 10;
         float y = ((i / ParticlesperRow - ParticlesperCol / 2 + 0.5) * spacing) / 10;
-      //  std::cout<<"x: "<<x<<" y: "<<y<<std::endl;
-        positions[i] = (vector2){x ,y};
-       // properties[i] = ExampleFunction(positions[i]);
+        //  std::cout<<"x: "<<x<<" y: "<<y<<std::endl;
+        positions[i] = (vector2){x, y};
+        // properties[i] = ExampleFunction(positions[i]);
     }
 }
-
-
-
-
