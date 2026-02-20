@@ -15,7 +15,9 @@ add_executable(FluidSimulation main.cpp
         WaterSimulator.cpp
         WaterSimulator.h
         SpatialHash.cpp
-        SpatialHash.h)
+        SpatialHash.h
+        vector.cpp
+        vector.h)
 
 target_include_directories(FluidSimulation PRIVATE /opt/homebrew/include)
 target_include_directories(FluidSimulation PRIVATE include  ${GLM_INCLUDE_DIR})

@@ -4,11 +4,8 @@
 
 #ifndef SPATIALHASH_H
 #define SPATIALHASH_H
+#include "vector.h"
 
-struct vector2
-{
-    float x ,y;
-};
 
 class SpatialHash
 {

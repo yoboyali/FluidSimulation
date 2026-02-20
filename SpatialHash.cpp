@@ -8,10 +8,7 @@
 #include <cstdlib>
 
 
-vector2 operator/(vector2 a, float b)
-{
-    return (vector2){a.x / b, a.y / b};
-}
+
 
 SpatialHash::SpatialHash(double spacing, int maxNumOfObjects)
 {
@@ -41,7 +38,7 @@ int SpatialHash::hashCoords(int x, int y)
 
 vector2 SpatialHash::intCoord(vector2 position)
 {
-    return (vector2){std::floor(position.x / Spacing), std::floor(position.y / Spacing)};
+    return (vector2){static_cast<float>(std::floor(position.x / Spacing)), static_cast<float>(std::floor(position.y / Spacing))};
 }
 
 int SpatialHash::hashPosition(vector2* positions, int index)

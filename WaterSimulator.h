@@ -9,10 +9,7 @@
 #include <random>
 #define Numofparticles 600
 
-struct vector2
-{
-    float x , y;
-};
+#include "vector.h"
 class WaterSimulator {
 
 

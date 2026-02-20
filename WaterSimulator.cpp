@@ -8,35 +8,7 @@ vector2 positions[Numofparticles] = {0};
 vector2 velocities[Numofparticles] = {0};
 double densities[Numofparticles];
 
-vector2 operator-(vector2 x , vector2 y)
-{
-    return (vector2){x.x - y.x , x.y - y.y};
-}
-bool operator==(vector2 a , vector2 b)
-{
-    if (a.x == b.x && a.y == b.y){return true;}
-    else
-        return false;
-}
-vector2 operator+(vector2 a , vector2 b)
-{
-    return (vector2){a.x + b.x , a.y + b.y};
-}
-vector2 operator+(vector2 b ,float a )
-{
-    return (vector2){b.x + a, a + b.y};
-}
-vector2 operator*(vector2 a , vector2 b)
-{
-    return (vector2){a.x * b.x , a.y * b.y};
-}
-vector2 operator*(vector2 a , float b)
-{
-    return (vector2){a.x * b , a.y * b};
-}vector2 operator/(vector2 a , float b)
-{
-    return (vector2){a.x / b , a.y / b};
-}
+
 
 void WaterSimulator::RenderScene()
 {
