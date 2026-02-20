@@ -13,7 +13,9 @@ find_path(GLM_INCLUDE_DIR glm/glm.hpp)
 
 add_executable(FluidSimulation main.cpp
         WaterSimulator.cpp
-        WaterSimulator.h)
+        WaterSimulator.h
+        SpatialHash.cpp
+        SpatialHash.h)
 
 target_include_directories(FluidSimulation PRIVATE /opt/homebrew/include)
 target_include_directories(FluidSimulation PRIVATE include  ${GLM_INCLUDE_DIR})

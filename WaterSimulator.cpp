@@ -50,14 +50,14 @@ void WaterSimulator::RenderScene()
     if (dt > maxDt) dt = maxDt;
     for (int i = 0 ; i < Numofparticles ; i++) {
         vector2 Pressure =calculatePressureForce(i);
-        vector2 PressureAcc = Pressure / densities[i];
-        velocities[i] = velocities[i] + (PressureAcc * dt);
-        velocities[i] = velocities[i] + (down * gravity * dt);
+        vector2 PressureAcc = (Pressure / densities[i]);
+        velocities[i] = velocities[i] + (PressureAcc * dt );
+        velocities[i] = velocities[i] + (down * gravity *dt);
         const float velocityDamping = 0.95; // Adjust between 0.95-0.995
         velocities[i] = velocities[i] * velocityDamping;
         positions[i] = (velocities[i] * dt) + positions[i];
         CheckCollision(positions[i] , i);
-        DrawSphere(positions[i].x , positions[i].y , 0.0);
+        DrawSphere(positions[i].x , positions[i].y , 0.9);
       //  drawarrow(positions[i] , pos);
 
     }
@@ -111,17 +111,15 @@ double WaterSimulator::CalculateDensity(vector2 samplepoint)
 
 double WaterSimulator::SmoothingKernel(double smoothingradius , double dst)
 {
-    double volume = M_PI * pow(smoothingradius ,8.0) / 4.0;
-    double value = 0 > smoothingradius *smoothingradius - dst * dst ? 0 : smoothingradius * smoothingradius - dst * dst;
-    return value * value * value / volume;
+    if (dst >= smoothingradius) return 0;
+    float volume = (M_PI * pow(smoothingradius , 4)) / 6;
+    return (smoothingradius - dst) * (smoothingradius - dst) / volume;
 }
 double WaterSimulator::SmoothingKernelDerivative(float smoothingradius, double dst)
 {
-    if (dst >= smoothingradius || dst < 0.0001) return 0.0;
-    float h = smoothingradius;
-    float r = dst;
-    float volume = M_PI * pow(h, 8.0) / 4.0;
-    return -6.0 * r * pow(h*h - r*r, 2.0) / volume;
+    if (dst >= smoothingradius) return 0;
+    float scale = 12 / (pow(smoothingradius , 4) * M_PI);
+    return (dst - smoothingradius) * scale;
 }
 
 void WaterSimulator::CheckCollision(vector2 pos ,int index)
@@ -136,13 +134,13 @@ void WaterSimulator::CheckCollision(vector2 pos ,int index)
             positions[index].y = border;
             velocities[index].y *= -1 * damping;
     }
-    if (pos.x <= -border) {
-        positions[index].x = -border;
+    if (pos.x <= -1.4) {
+        positions[index].x = -1.4;
         velocities[index].x *= -1 * damping;
         //  std::cout<<"collision index:"<<index<<std::endl;
     }
-    if (pos.x >= border) {
-        positions[index].x = border;
+    if (pos.x >= 1.4) {
+        positions[index].x = 1.4;
         velocities[index].x *= -1 * damping;
     }
 

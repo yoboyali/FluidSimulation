@@ -7,7 +7,7 @@
 #include <GL/freeglut.h>
 #include <iostream>
 #include <random>
-#define Numofparticles 300
+#define Numofparticles 600
 
 struct vector2
 {
@@ -38,10 +38,10 @@ public: void RenderScene();
     WaterSimulator();
     void drawarrow(vector2 start , vector2 end);
     vector2 down = {0 , -1};
-    double radius= 0.02 , gravity = 10.0 , damping = 0.8 , particlespacing = 0.09 , smoothingradius = 0.1 , mass = 1.0;
+    double radius= 0.01 , gravity = 0.0 , damping = 0.8 , particlespacing = 0.3 , smoothingradius = 0.1 , mass = 1.0;
     double t2 = 0;
-    double targetDensity = 2.5;
-    double pressureMultiplier = 550.70;
+    double targetDensity = 0.0;
+    double pressureMultiplier = 1000.70;
 
 };
 
