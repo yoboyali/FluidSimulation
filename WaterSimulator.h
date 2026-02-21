@@ -27,15 +27,17 @@ private:
     float ConvertDensityToPressure(double density);
     float CalculateSharedPressure(float densityA , float DensityB);
     vector3 EvaluateGradient(float t);
+    void renderInfoText();
+
     double magnitude(vector2 a)
     {
         return sqrt((a.x * a.x) + (a.y * a.y));
     }
     vector2 down = {0 , -1};
-    const double radius= 0.01 , gravity = 0.0 , damping = 0.8 , particlespacing = 0.3 , smoothingradius = 0.05 , mass = 0.2;
+    const double radius= 0.01 , gravity = 0.0 , damping = 0.8 , particlespacing = 0.3 , smoothingradius = 0.05 , mass = 0.5;
     double oldTime = 0;
-    double targetDensity = 0.2;
-    double pressureMultiplier = 100.70;
+    double targetDensity = 0.3;
+    double pressureMultiplier = 200.70;
     SpatialHash* spatialHash;
 
 public:

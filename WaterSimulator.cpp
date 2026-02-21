@@ -4,6 +4,7 @@
 
 #include "WaterSimulator.h"
 #include <iostream>
+#include <sstream>
 vector2 positions[Numofparticles] = {0};
 vector2 PredictedPositions[Numofparticles] = {0};
 vector2 velocities[Numofparticles] = {0};
@@ -24,27 +25,38 @@ const int gradientSize = sizeof(gradient) / sizeof(ColorStop);
 
 void WaterSimulator::RenderScene()
 {
-    updateDensities();
     double time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
     double dt = time - oldTime;
     const double maxDt = 0.005;
     if (dt > maxDt) dt = maxDt;
 
+    // Step 1: Apply gravity and predict
+    for (int i = 0; i < Numofparticles; i++) {
+        velocities[i] = velocities[i] + (down * gravity * dt);
+        PredictedPositions[i] = positions[i] + velocities[i] * (1.0/120.0);
+    }
 
-    //spatialHash->create(PredictedPositions , Numofparticles);
-    for (int i = 0 ; i < Numofparticles ; i++) {
-        PredictedPositions[i] = positions[i] + velocities[i] * dt;
-        vector2 Pressure =calculatePressureForce(i);
-        vector2 PressureAcc = (Pressure / densities[i]);
-        velocities[i] = velocities[i] + (PressureAcc * dt);
-        velocities[i] = velocities[i] + (down * gravity *dt);
-        const float velocityDamping = 0.95; // Adjust between 0.95-0.995
-        velocities[i] = velocities[i] * velocityDamping;
-        positions[i] = (velocities[i] * dt) + PredictedPositions[i];
-        CheckCollision(positions[i] , i);
+    // Step 2: Build spatial hash and calculate densities
+    spatialHash->create(PredictedPositions, Numofparticles);
+    for (int i = 0; i < Numofparticles; i++) {
+        densities[i] = CalculateDensity(i);
+    }
+
+    // Step 3: Calculate and apply pressure
+    for (int i = 0; i < Numofparticles; i++) {
+        vector2 pressureForce = calculatePressureForce(i);
+        vector2 pressureAcc = pressureForce / densities[i];
+        velocities[i] = velocities[i] + (pressureAcc * dt);
+    }
+
+    // Step 4: Integrate positions and handle collisions
+    for (int i = 0; i < Numofparticles; i++) {
+        positions[i] = positions[i] + (velocities[i] * dt);
+        CheckCollision(positions[i], i);
+
+        // Render
         float speed = magnitude(velocities[i]);
-        float maxSpeed = 2.0f;
-        float t = speed / maxSpeed;
+        float t = speed / 2.0f;
         vector3 color = EvaluateGradient(t);
         SetColor(color);
         DrawSphere(positions[i].x, positions[i].y, 0.0);
@@ -52,7 +64,6 @@ void WaterSimulator::RenderScene()
 
     glutSwapBuffers();
     oldTime = time;
-
 }
 
 WaterSimulator::~WaterSimulator()
