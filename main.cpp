@@ -56,12 +56,13 @@ int main(int argc, char** argv) {
   const int kTopLeftY = 0;
   glutInitWindowPosition(kTopLeftX, kTopLeftY);
 
-  int win = glutCreateWindow("Hello, Sphere!");
+  int win = glutCreateWindow("Water Simulation!");
   glViewport(0, 0, WindowWidth, WindowHeight);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
   gluOrtho2D(-1.0*WindowWidth/WindowHeight, 1.0*WindowWidth/WindowHeight, -1.0, 1.0);
   glutDisplayFunc(Scene);
+  //glutMouseFunc(simulator.MouseCallBack);
   glutIdleFunc(Scene);
 
   glutMainLoop();

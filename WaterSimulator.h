@@ -6,14 +6,11 @@
 #define WATERSIMULATOR_H
 #include <GL/freeglut.h>
 #include <random>
-#define Numofparticles 3000
+#define Numofparticles 1000
 
 #include "SpatialHash.h"
 #include "vector.h"
 class WaterSimulator {
-
-
-
 private:
     void SetColor(vector3 color);
     void SetMaterialColor(const GLfloat material_color[4]);
@@ -27,23 +24,30 @@ private:
     float ConvertDensityToPressure(double density);
     float CalculateSharedPressure(float densityA , float DensityB);
     vector3 EvaluateGradient(float t);
-    void renderInfoText();
-
+    float ViscositySmoothingKernel(int dst);
+    vector2 CalculateViscosityForce(int index);
     double magnitude(vector2 a)
     {
         return sqrt((a.x * a.x) + (a.y * a.y));
     }
-    vector2 down = {0 , -1};
-    const double radius= 0.01 , gravity = 0.0 , damping = 0.8 , particlespacing = 0.3 , smoothingradius = 0.05 , mass = 0.5;
+    static float dot(vector2 a , vector2 b)
+    {
+        return a.x * b.x + a.y * b.y;
+    }
+    vector2 down = {0.0 , -10.0};
+    const double radius= 0.01 , gravity = 1.0 , damping = 0.1 , particlespacing = 0.3 , smoothingradius = 0.05 , mass = 0.5 , ViscosityStrength = 1.1;
     double oldTime = 0;
+    float Poly6ScalingFactor;
     double targetDensity = 0.3;
     double pressureMultiplier = 200.70;
     SpatialHash* spatialHash;
-
 public:
     WaterSimulator();
-    void RenderScene();
     ~WaterSimulator();
+    void RenderScene();
+    static void MouseCallBack(int button , int state , int x , int y);
+
+
 
 
 };
