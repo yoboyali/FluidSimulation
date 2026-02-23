@@ -49,13 +49,9 @@ void WaterSimulator::RenderScene()
     for (int i = 0; i < Numofparticles; i++) {
         vector2 pressureForce = calculatePressureForce(i);
         vector2 pressureAcc = pressureForce / densities[i];
-        vector2 viscosityForce = Calculat   eViscosityForce(i);
-        if (i == 0){std::cout<<viscosityForce.x<<" "<<viscosityForce.y<<std::endl;}
-        const float maxViscosity = 10.0f;
-        float mag = magnitude(viscosityForce);
-        if (mag > maxViscosity) {
-            viscosityForce = (viscosityForce / mag) * maxViscosity;
-        }
+        vector2 viscosityForce = CalculateViscosityForce(i);
+        if (magnitude(viscosityForce) > 10.0){viscosityForce = {0};}
+        //if (i == 0){std::cout<<viscosityForce.x<<" "<<viscosityForce.y<<std::endl;}
         velocities[i] = (pressureAcc * dt) + velocities[i];
         velocities[i] = (viscosityForce * dt) + velocities[i];
     }
@@ -237,12 +233,13 @@ float WaterSimulator::ViscositySmoothingKernel(float dst)
 vector2 WaterSimulator::CalculateViscosityForce(int index)
 {
     vector2 viscosityForce = {0,0};
-    vector2 position = positions[index];
-    spatialHash->query(PredictedPositions, index, smoothingradius);
+    vector2 position = PredictedPositions[index];
+   // spatialHash->query(PredictedPositions, index, smoothingradius);
 
     for (int i = 0; i < spatialHash->querySize ; i++) {
         int neighborIndex = spatialHash->queryIds[i];
-        float dst = magnitude(position - positions[neighborIndex]);
+        if (index == neighborIndex){continue;}
+        float dst = magnitude(position - PredictedPositions[neighborIndex]);
         float influence = ViscositySmoothingKernel(dst);
         viscosityForce = ((velocities[neighborIndex] - velocities[index]) * influence) + viscosityForce;
     }

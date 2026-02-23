@@ -6,7 +6,7 @@
 #define WATERSIMULATOR_H
 #include <GL/freeglut.h>
 #include <random>
-#define Numofparticles 1000
+#define Numofparticles 2000
 
 #include "SpatialHash.h"
 #include "vector.h"
@@ -35,9 +35,9 @@ private:
         return a.x * b.x + a.y * b.y;
     }
     vector2 down = {0.0 , -1.0};
-    const double radius= 0.01 , gravity = 1.0 , damping = 0.1 , particlespacing = 0.3 , smoothingradius = 0.05 , mass = 0.5 , ViscosityStrength = 1.5;
+    const double radius= 0.01 , gravity = 1.0 , damping = 0.1 , particlespacing = 0.3 , smoothingradius = 0.05 , mass = 0.5 , ViscosityStrength = 1.15;
     double oldTime = 0;
-    float Poly6ScalingFactor = 2;;
+    float Poly6ScalingFactor;
     double targetDensity = 0.3;
     double pressureMultiplier = 150.70;
     SpatialHash* spatialHash;
