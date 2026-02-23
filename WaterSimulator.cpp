@@ -49,7 +49,13 @@ void WaterSimulator::RenderScene()
     for (int i = 0; i < Numofparticles; i++) {
         vector2 pressureForce = calculatePressureForce(i);
         vector2 pressureAcc = pressureForce / densities[i];
-        vector2 viscosityForce = CalculateViscosityForce(i);
+        vector2 viscosityForce = Calculat   eViscosityForce(i);
+        if (i == 0){std::cout<<viscosityForce.x<<" "<<viscosityForce.y<<std::endl;}
+        const float maxViscosity = 10.0f;
+        float mag = magnitude(viscosityForce);
+        if (mag > maxViscosity) {
+            viscosityForce = (viscosityForce / mag) * maxViscosity;
+        }
         velocities[i] = (pressureAcc * dt) + velocities[i];
         velocities[i] = (viscosityForce * dt) + velocities[i];
     }
@@ -61,7 +67,7 @@ void WaterSimulator::RenderScene()
 
         // Render
         float speed = magnitude(velocities[i]);
-        float t = speed / 2.5f;
+        float t = speed / 1.0f;
         vector3 color = EvaluateGradient(t);
         SetColor(color);
         DrawSphere(positions[i].x, positions[i].y, 0.0);
@@ -219,9 +225,8 @@ vector3 WaterSimulator::EvaluateGradient(float t)
 
     return gradient[gradientSize - 1].color;
 }
-float WaterSimulator::ViscositySmoothingKernel(int dst)
+float WaterSimulator::ViscositySmoothingKernel(float dst)
 {
-
     if (dst < smoothingradius)
     {
         float v = smoothingradius * smoothingradius - dst * dst;
@@ -229,24 +234,17 @@ float WaterSimulator::ViscositySmoothingKernel(int dst)
     }
     return 0;
 }
-vector2 WaterSimulator::CalculateViscosityForce(int i)
+vector2 WaterSimulator::CalculateViscosityForce(int index)
 {
     vector2 viscosityForce = {0,0};
+    vector2 position = positions[index];
+    spatialHash->query(PredictedPositions, index, smoothingradius);
 
-    spatialHash->query(PredictedPositions, i, smoothingradius);
-
-    for (int n = 0; n < spatialHash->querySize; n++)
-    {
-        int j = spatialHash->queryIds[n];
-        if (j == i) continue;
-        if (j < 0 || j >= Numofparticles) continue; // safety guard
-
-        float dst = magnitude(PredictedPositions[i] - PredictedPositions[j]);
-        if (dst >= smoothingradius) continue;
-
+    for (int i = 0; i < spatialHash->querySize ; i++) {
+        int neighborIndex = spatialHash->queryIds[i];
+        float dst = magnitude(position - positions[neighborIndex]);
         float influence = ViscositySmoothingKernel(dst);
-
-        viscosityForce = ((velocities[j] - velocities[i]) * influence) + viscosityForce;
+        viscosityForce = ((velocities[neighborIndex] - velocities[index]) * influence) + viscosityForce;
     }
 
     return viscosityForce * ViscosityStrength;
@@ -273,7 +271,7 @@ WaterSimulator::WaterSimulator()
     int ParticlesperRow = (int) sqrt(Numofparticles);
     int ParticlesperCol = (Numofparticles - 1) / ParticlesperRow + 1;
     float spacing = radius * 2 + particlespacing;
-    Poly6ScalingFactor = 4 / (M_PI * pow(smoothingradius, 8));
+    Poly6ScalingFactor = 4.0f / (M_PI * pow(smoothingradius, 8.0f));
     spatialHash = new SpatialHash(smoothingradius, Numofparticles);
     for (int i = 0; i < Numofparticles; i++) {
         float x = ((i % ParticlesperRow - ParticlesperRow / 2 + 0.5) * spacing) / 10;

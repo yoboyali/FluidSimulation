@@ -24,7 +24,7 @@ private:
     float ConvertDensityToPressure(double density);
     float CalculateSharedPressure(float densityA , float DensityB);
     vector3 EvaluateGradient(float t);
-    float ViscositySmoothingKernel(int dst);
+    float ViscositySmoothingKernel(float dst);
     vector2 CalculateViscosityForce(int index);
     double magnitude(vector2 a)
     {
@@ -34,12 +34,12 @@ private:
     {
         return a.x * b.x + a.y * b.y;
     }
-    vector2 down = {0.0 , -10.0};
-    const double radius= 0.01 , gravity = 1.0 , damping = 0.1 , particlespacing = 0.3 , smoothingradius = 0.05 , mass = 0.5 , ViscosityStrength = 1.1;
+    vector2 down = {0.0 , -1.0};
+    const double radius= 0.01 , gravity = 1.0 , damping = 0.1 , particlespacing = 0.3 , smoothingradius = 0.05 , mass = 0.5 , ViscosityStrength = 1.5;
     double oldTime = 0;
-    float Poly6ScalingFactor;
+    float Poly6ScalingFactor = 2;;
     double targetDensity = 0.3;
-    double pressureMultiplier = 200.70;
+    double pressureMultiplier = 150.70;
     SpatialHash* spatialHash;
 public:
     WaterSimulator();
