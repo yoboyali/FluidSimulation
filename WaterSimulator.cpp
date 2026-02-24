@@ -32,11 +32,12 @@ void WaterSimulator::RenderScene()
     const double maxDt = 0.005;
     float fps = 1.0 / dt;
 
-   // if (dt > maxDt) dt = maxDt;
+    if (dt > maxDt) dt = maxDt;
     // Step 1: Apply gravity and predict
     for (int i = 0; i < Numofparticles; i++) {
         velocities[i] = velocities[i] + (down * gravity * dt);
         PredictedPositions[i] = positions[i] + velocities[i] * (1.0/120.0);
+
     }
 
     // Step 2: Build spatial hash and calculate densities
@@ -50,10 +51,9 @@ void WaterSimulator::RenderScene()
         vector2 pressureForce = calculatePressureForce(i);
         vector2 pressureAcc = pressureForce / densities[i];
         vector2 viscosityForce = CalculateViscosityForce(i);
-        if (magnitude(viscosityForce) > 10.0){viscosityForce = {0};}
+        //if (magnitude(viscosityForce) > 10.0){viscosityForce = {0};}
         //if (i == 0){std::cout<<viscosityForce.x<<" "<<viscosityForce.y<<std::endl;}
-        velocities[i] = (pressureAcc * dt) + velocities[i];
-        velocities[i] = (viscosityForce * dt) + velocities[i];
+        velocities[i] = velocities[i] + (pressureAcc + viscosityForce/ mass) * dt;
     }
 
     // Step 4: Integrate positions and handle collisions
@@ -63,7 +63,7 @@ void WaterSimulator::RenderScene()
 
         // Render
         float speed = magnitude(velocities[i]);
-        float t = speed / 1.0f;
+        float t = speed / 3.0f;
         vector3 color = EvaluateGradient(t);
         SetColor(color);
         DrawSphere(positions[i].x, positions[i].y, 0.0);
@@ -234,14 +234,16 @@ vector2 WaterSimulator::CalculateViscosityForce(int index)
 {
     vector2 viscosityForce = {0,0};
     vector2 position = PredictedPositions[index];
-   // spatialHash->query(PredictedPositions, index, smoothingradius);
+    spatialHash->query(PredictedPositions, index, smoothingradius);
 
     for (int i = 0; i < spatialHash->querySize ; i++) {
         int neighborIndex = spatialHash->queryIds[i];
         if (index == neighborIndex){continue;}
         float dst = magnitude(position - PredictedPositions[neighborIndex]);
         float influence = ViscositySmoothingKernel(dst);
-        viscosityForce = ((velocities[neighborIndex] - velocities[index]) * influence) + viscosityForce;
+        //viscosityForce = ((velocities[neighborIndex] - velocities[index]) * influence * mass) + viscosityForce;
+        viscosityForce = ((velocities[neighborIndex] - velocities[index]) *
+                  influence * (mass / densities[neighborIndex]) + viscosityForce);
     }
 
     return viscosityForce * ViscosityStrength;
