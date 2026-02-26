@@ -29,7 +29,7 @@ void WaterSimulator::RenderScene()
     double time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
     double dt = time - oldTime;
 
-    const double maxDt = 0.005;
+    const double maxDt = 0.1;
     float fps = 1.0 / dt;
 
     if (dt > maxDt) dt = maxDt;
