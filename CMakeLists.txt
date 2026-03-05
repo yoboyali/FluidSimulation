@@ -22,11 +22,13 @@ add_executable(FluidSimulation
         SpatialHash.cpp
         SpatialHash.h
         vector.cpp
-        vector.h)
+        vector.h
+        glad/src/glad.c)
 
 target_include_directories(FluidSimulation PRIVATE
         ${GLUT_INCLUDE_DIR}
-        ${CMAKE_SOURCE_DIR}/glm   # points to the glm folder in your project root
+        ${CMAKE_SOURCE_DIR}/glad/include  
+        ${CMAKE_SOURCE_DIR}/glm
 )
 
 target_link_libraries(FluidSimulation
