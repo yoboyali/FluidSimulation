@@ -1,71 +1,138 @@
+#include <fstream>
+#include <glad/glad.h>
 #include <GL/freeglut.h>
 
 #include <iostream>
+#include <sstream>
 
 #include "WaterSimulator.h"
 #define WindowWidth 1500
 #define WindowHeight 1000
 WaterSimulator simulator;
 
-void SetBackgroundColor() {
-  const GLclampf kClearRed = 0.0f;
-  const GLclampf kClearGreen = 0.0f;
-  const GLclampf kClearBlue = 0.0f;
-  const GLclampf kClearAlpha = 1.0f;
-  glClearColor(kClearRed, kClearGreen, kClearBlue, kClearAlpha);
+std::string loadShaderSource(const char* filepath) {
+    std::ifstream file(filepath);
+    std::stringstream ss;
+    ss << file.rdbuf();
+    return ss.str();
 }
 
-void DrawBackground() {
-  SetBackgroundColor();
+// Helper to compile and link shaders
+GLuint createShaderProgram(const char* vertPath, const char* fragPath) {
+    // Load source
+    std::string vertSrc = loadShaderSource(vertPath);
+    std::string fragSrc = loadShaderSource(fragPath);
+    const char* vSrc = vertSrc.c_str();
+    const char* fSrc = fragSrc.c_str();
 
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_LIGHTING);  // allow turning on lights for some 3D shading!
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_CULL_FACE);
-  glCullFace(GL_BACK);
+    // Compile vertex shader
+    GLuint vert = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vert, 1, &vSrc, nullptr);
+    glCompileShader(vert);
+
+    // Compile fragment shader
+    GLuint frag = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(frag, 1, &fSrc, nullptr);
+    glCompileShader(frag);
+
+    // Link into program
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vert);
+    glAttachShader(program, frag);
+    glLinkProgram(program);
+
+    glDeleteShader(vert);
+    glDeleteShader(frag);
+
+    return program;
 }
 
+GLuint shaderProgram;
+GLuint computeProgram;
+GLuint screenTexture;
+GLuint VAO, VBO;
 
-void TurnOnLight() {
-  const GLfloat kAmbient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
-  const GLfloat kDiffuse[4] = {0.4f, 0.4f, 0.4f, 1.0f};
-  const GLfloat kSpecular[4] = {0.7f, 0.7f, 0.7f, 1.0f};
-  const GLfloat kPosition[4] = {0.0f, 0.0f, 0.5f, 1.0f};
-  glLightfv(GL_LIGHT0, GL_AMBIENT, kAmbient);
-  glLightfv(GL_LIGHT0, GL_DIFFUSE, kDiffuse);
-  glLightfv(GL_LIGHT0, GL_SPECULAR, kSpecular);
-  glLightfv(GL_LIGHT0, GL_POSITION, kPosition);
-  glEnable(GL_LIGHT0);
+// fullscreen quad
+float vertices[] = {
+   // pos              // uvs
+   -1.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,  1.0f, 0.0f,
+    1.0f,  1.0f, 0.0f,  1.0f, 1.0f,
+   -1.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+    1.0f,  1.0f, 0.0f,  1.0f, 1.0f,
+   -1.0f,  1.0f, 0.0f,  0.0f, 1.0f,
+};
+
+GLuint createComputeProgram(const char* path) {
+    std::string src = loadShaderSource(path);
+    const char* cSrc = src.c_str();
+    GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+    glShaderSource(shader, 1, &cSrc, nullptr);
+    glCompileShader(shader);
+    GLuint program = glCreateProgram();
+    glAttachShader(program, shader);
+    glLinkProgram(program);
+    glDeleteShader(shader);
+    return program;
 }
 
-void Scene()
-{
+void init() {
+    // create texture for compute shader to write to
+    glGenTextures(1, &screenTexture);
+    glBindTexture(GL_TEXTURE_2D, screenTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, WindowWidth, WindowHeight, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-  DrawBackground();
-  TurnOnLight();
-  simulator.RenderScene();
+    // setup fullscreen quad
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
+    // compile shaders
+    shaderProgram = createShaderProgram("VertexShader.vert", "FragmentShader.frag");
+    computeProgram = createComputeProgram("ComputeShader.comp");
 }
+
+void display() {
+    // 1. run compute shader to write to texture
+    glUseProgram(computeProgram);
+    glBindImageTexture(0, screenTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+    glDispatchCompute(WindowWidth / 16, WindowHeight / 16, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT); // wait for compute to finish
+
+    // 2. render fullscreen quad using the texture
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glUseProgram(shaderProgram);
+    glBindTexture(GL_TEXTURE_2D, screenTexture);
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glutSwapBuffers();
+}
+
 int main(int argc, char** argv) {
-  glutInit(&argc, argv);
-  glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
+    glutInitWindowSize(WindowWidth, WindowHeight);
+    glutInitWindowPosition(0, 0);
+    glutCreateWindow("Simulation!");
 
-  glutInitWindowSize(WindowWidth, WindowHeight);
+    if (!gladLoadGL()) {
+        std::cerr << "Failed to initialize GLAD" << std::endl;
+        return -1;
+    }
 
-  const int kTopLeftX = 0;
-  const int kTopLeftY = 0;
-  glutInitWindowPosition(kTopLeftX, kTopLeftY);
+    glViewport(0, 0, WindowWidth, WindowHeight);
+    init();
 
-  int win = glutCreateWindow("Water Simulation!");
-  glViewport(0, 0, WindowWidth, WindowHeight);
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  gluOrtho2D(-1.0*WindowWidth/WindowHeight, 1.0*WindowWidth/WindowHeight, -1.0, 1.0);
-  glutDisplayFunc(Scene);
-  //glutMouseFunc(simulator.MouseCallBack);
-  glutIdleFunc(Scene);
-
-  glutMainLoop();
-
-  return 0;
+    glutDisplayFunc(display);
+    glutMainLoop();
+    return 0;
 }
