@@ -1,3 +1,5 @@
 /src/glad.c
 /metal-cpp
 /freeglut
+/glm
+/glad

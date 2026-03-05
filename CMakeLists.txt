@@ -3,15 +3,20 @@ project(FluidSimulation)
 
 set(CMAKE_CXX_STANDARD 20)
 
-
 find_package(OpenGL REQUIRED)
 
-find_library(GLUT_LIBRARY glut PATHS /opt/homebrew/lib REQUIRED)
+# Cross-platform freeglut
+if(WIN32)
+    set(FREEGLUT_DIR "${CMAKE_SOURCE_DIR}/freeglut")
+    set(GLUT_LIBRARY "${FREEGLUT_DIR}/lib/x64/libfreeglut.a")
+    set(GLUT_INCLUDE_DIR "${FREEGLUT_DIR}/include")
+else()
+    find_package(GLUT REQUIRED)
+    set(GLUT_INCLUDE_DIR /opt/homebrew/include)
+endif()
 
-find_package(glm REQUIRED)
-find_path(GLM_INCLUDE_DIR glm/glm.hpp)
-
-add_executable(FluidSimulation main.cpp
+add_executable(FluidSimulation
+        main.cpp
         WaterSimulator.cpp
         WaterSimulator.h
         SpatialHash.cpp
@@ -19,11 +24,13 @@ add_executable(FluidSimulation main.cpp
         vector.cpp
         vector.h)
 
-target_include_directories(FluidSimulation PRIVATE /opt/homebrew/include)
-target_include_directories(FluidSimulation PRIVATE include  ${GLM_INCLUDE_DIR})
-
-target_link_libraries(FluidSimulation
-        ${OPENGL_gl_LIBRARY}
-        ${GLUT_LIBRARY}
+target_include_directories(FluidSimulation PRIVATE
+        ${GLUT_INCLUDE_DIR}
+        ${CMAKE_SOURCE_DIR}/glm   # points to the glm folder in your project root
 )
 
+target_link_libraries(FluidSimulation
+        OpenGL::GL
+        ${GLUT_LIBRARY}
+        glu32
+)
