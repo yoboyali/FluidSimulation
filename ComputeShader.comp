@@ -1,8 +1,37 @@
 #version 460 core
-layout(local_size_x = 16, local_size_y = 16) in;
-layout(rgba32f, binding = 0) uniform image2D screen;
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
+layout(std430, binding = 0) buffer PositionBuffer {
+    vec2 positions[];
+};
+layout(std430, binding = 1) buffer VelocityBuffer {
+    vec2 velocities[];
+};
+
+uniform float dt;
+vec2 gravity = vec2(0.0, -0.01);
+
+void checkCollisions(inout vec2 pos, inout vec2 vel) {
+    if (pos.y <= -0.8) {
+        pos.y = -0.8;
+        vel.y *= -1.0;
+    }
+}
+void Compute(){
+    uint index = gl_GlobalInvocationID.x;
+
+    vec2 pos = positions[index];
+    vec2 vel = velocities[index];
+
+    vel += dt * gravity;
+    pos += vel;
+    checkCollisions(pos, vel);
+
+    positions[index] = pos;
+    velocities[index] = vel;
+}
 void main() {
-    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    imageStore(screen, coord, vec4(1.0, 0.0, 0.0, 1.0)); // red
+
+    Compute();
+
 }

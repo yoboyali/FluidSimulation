@@ -1,14 +1,27 @@
 #include <fstream>
 #include <glad/glad.h>
 #include <GL/freeglut.h>
-
+#include <glm.hpp>
 #include <iostream>
 #include <sstream>
+#include <vector>
+#include <gtc/matrix_transform.hpp>
+#include <gtc/type_ptr.hpp>
 
 #include "WaterSimulator.h"
-#define WindowWidth 1500
+#define WindowWidth  1500
 #define WindowHeight 1000
+#define NUM_PARTICLES 10
+#define PARTICLE_RADIUS 0.02f
+
 WaterSimulator simulator;
+
+GLuint shaderProgram;
+GLuint computeProgram;
+GLuint VAO;
+GLuint posSSBO;
+GLuint velSSBO;
+glm::mat4 proj;
 
 std::string loadShaderSource(const char* filepath) {
     std::ifstream file(filepath);
@@ -17,51 +30,28 @@ std::string loadShaderSource(const char* filepath) {
     return ss.str();
 }
 
-// Helper to compile and link shaders
 GLuint createShaderProgram(const char* vertPath, const char* fragPath) {
-    // Load source
     std::string vertSrc = loadShaderSource(vertPath);
     std::string fragSrc = loadShaderSource(fragPath);
     const char* vSrc = vertSrc.c_str();
     const char* fSrc = fragSrc.c_str();
 
-    // Compile vertex shader
     GLuint vert = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vert, 1, &vSrc, nullptr);
     glCompileShader(vert);
 
-    // Compile fragment shader
     GLuint frag = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(frag, 1, &fSrc, nullptr);
     glCompileShader(frag);
 
-    // Link into program
     GLuint program = glCreateProgram();
     glAttachShader(program, vert);
     glAttachShader(program, frag);
     glLinkProgram(program);
-
     glDeleteShader(vert);
     glDeleteShader(frag);
-
     return program;
 }
-
-GLuint shaderProgram;
-GLuint computeProgram;
-GLuint screenTexture;
-GLuint VAO, VBO;
-
-// fullscreen quad
-float vertices[] = {
-   // pos              // uvs
-   -1.0f, -1.0f, 0.0f,  0.0f, 0.0f,
-    1.0f, -1.0f, 0.0f,  1.0f, 0.0f,
-    1.0f,  1.0f, 0.0f,  1.0f, 1.0f,
-   -1.0f, -1.0f, 0.0f,  0.0f, 0.0f,
-    1.0f,  1.0f, 0.0f,  1.0f, 1.0f,
-   -1.0f,  1.0f, 0.0f,  0.0f, 1.0f,
-};
 
 GLuint createComputeProgram(const char* path) {
     std::string src = loadShaderSource(path);
@@ -77,44 +67,58 @@ GLuint createComputeProgram(const char* path) {
 }
 
 void init() {
-    // create texture for compute shader to write to
-    glGenTextures(1, &screenTexture);
-    glBindTexture(GL_TEXTURE_2D, screenTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, WindowWidth, WindowHeight, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    std::vector<glm::vec2> positions(NUM_PARTICLES);
+    std::vector<glm::vec2> velocities(NUM_PARTICLES, glm::vec2(0.0f));
 
-    // setup fullscreen quad
+    float aspectRatio = (float)WindowWidth / (float)WindowHeight;
+    for (int i = 0; i < NUM_PARTICLES; i++) {
+        positions[i] = glm::vec2(
+            ((float)rand()/RAND_MAX) * 2.0f * aspectRatio - aspectRatio,
+            ((float)rand()/RAND_MAX) * 2.0f - 1.0f
+        );
+    }
+
+    glGenBuffers(1, &posSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, posSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), positions.data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
+
+    glGenBuffers(1, &velSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, velSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), velocities.data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
+
     glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
 
-    // compile shaders
-    shaderProgram = createShaderProgram("VertexShader.vert", "FragmentShader.frag");
+    shaderProgram  = createShaderProgram("VertexShader.vert", "FragmentShader.frag");
     computeProgram = createComputeProgram("ComputeShader.comp");
+
+    proj = glm::ortho(-(float)WindowWidth/WindowHeight,
+                       (float)WindowWidth/WindowHeight,
+                      -1.0f, 1.0f);
 }
 
 void display() {
-    // 1. run compute shader to write to texture
-    glUseProgram(computeProgram);
-    glBindImageTexture(0, screenTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
-    glDispatchCompute(WindowWidth / 16, WindowHeight / 16, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT); // wait for compute to finish
+    static float dt = 0.016f;
 
-    // 2. render fullscreen quad using the texture
+    glUseProgram(computeProgram);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
+    glUniform1f(glGetUniformLocation(computeProgram, "dt"), dt);
+    glDispatchCompute(NUM_PARTICLES, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    // 2. render pass — draw particles
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(shaderProgram);
-    glBindTexture(GL_TEXTURE_2D, screenTexture);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "proj"),   1, GL_FALSE, glm::value_ptr(proj));
+    glUniform1f       (glGetUniformLocation(shaderProgram, "radius"), PARTICLE_RADIUS);
     glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glDrawArrays(GL_TRIANGLES, 0, NUM_PARTICLES * 6);
 
     glutSwapBuffers();
+    glutPostRedisplay();
 }
 
 int main(int argc, char** argv) {
@@ -131,7 +135,6 @@ int main(int argc, char** argv) {
 
     glViewport(0, 0, WindowWidth, WindowHeight);
     init();
-
     glutDisplayFunc(display);
     glutMainLoop();
     return 0;
