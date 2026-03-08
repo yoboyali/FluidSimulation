@@ -11,8 +11,9 @@
 #include "WaterSimulator.h"
 #define WindowWidth  1500
 #define WindowHeight 1000
-#define NUM_PARTICLES 10
+#define NUM_PARTICLES 30
 #define PARTICLE_RADIUS 0.02f
+#define Particlespacing 0.3f
 
 WaterSimulator simulator;
 
@@ -20,7 +21,9 @@ GLuint shaderProgram;
 GLuint computeProgram;
 GLuint VAO;
 GLuint posSSBO;
+GLuint predSSBO;
 GLuint velSSBO;
+GLuint densSSBO;
 glm::mat4 proj;
 
 std::string loadShaderSource(const char* filepath) {
@@ -69,13 +72,17 @@ GLuint createComputeProgram(const char* path) {
 void init() {
     std::vector<glm::vec2> positions(NUM_PARTICLES);
     std::vector<glm::vec2> velocities(NUM_PARTICLES, glm::vec2(0.0f));
+    std::vector<glm::vec2> PredictedPositions(NUM_PARTICLES, glm::vec2(0.0f));
+    std::vector<glm::vec2> Densities(NUM_PARTICLES, glm::vec2(0.0f));
 
-    float aspectRatio = (float)WindowWidth / (float)WindowHeight;
+
+    int ParticlesperRow = (int) sqrt(NUM_PARTICLES);
+    int ParticlesperCol = (NUM_PARTICLES - 1) / ParticlesperRow + 1;
+    float spacing = PARTICLE_RADIUS * 2 + Particlespacing;
     for (int i = 0; i < NUM_PARTICLES; i++) {
-        positions[i] = glm::vec2(
-            ((float)rand()/RAND_MAX) * 2.0f * aspectRatio - aspectRatio,
-            ((float)rand()/RAND_MAX) * 2.0f - 1.0f
-        );
+        float x = ((i % ParticlesperRow - ParticlesperRow / 2 + 0.5) * spacing) / 10;
+        float y = ((i / ParticlesperRow - ParticlesperCol / 2 + 0.5) * spacing) / 10;
+        positions[i] = glm::vec2(x , y);
     }
 
     glGenBuffers(1, &posSSBO);
@@ -88,10 +95,20 @@ void init() {
     glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), velocities.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
 
+    glGenBuffers(1, &predSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, predSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), PredictedPositions.data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
+
+    glGenBuffers(1, &densSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, densSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), Densities.data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, densSSBO);
+
     glGenVertexArrays(1, &VAO);
 
     shaderProgram  = createShaderProgram("VertexShader.vert", "FragmentShader.frag");
-    computeProgram = createComputeProgram("ComputeShader.comp");
+    computeProgram = createComputeProgram("ComputePredicted.comp");
 
     proj = glm::ortho(-(float)WindowWidth/WindowHeight,
                        (float)WindowWidth/WindowHeight,
@@ -108,7 +125,6 @@ void display() {
     glDispatchCompute(NUM_PARTICLES, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-    // 2. render pass — draw particles
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(shaderProgram);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);

@@ -10,10 +10,9 @@ uniform float radius;
 out vec2 localPos;
 
 void main() {
-	uint particleIndex = gl_VertexID / 6;  // 6 vertices per particle
-	uint cornerIndex   = gl_VertexID % 6;  // which vertex of the 2 triangles
+	uint particleIndex = gl_VertexID / 6;
+	uint cornerIndex   = gl_VertexID % 6;
 
-	// two triangles forming a quad
 	vec2 corners[6] = vec2[](
 	vec2(-1.0, -1.0),
 	vec2( 1.0, -1.0),
@@ -26,6 +25,6 @@ void main() {
 	vec2 center = positions[particleIndex];
 	vec2 offset = corners[cornerIndex] * radius;
 
-	localPos = corners[cornerIndex];  // passes -1 to 1 range to fragment shader
+	localPos = corners[cornerIndex];  
 	gl_Position = proj * vec4(center + offset, 0.0, 1.0);
 }

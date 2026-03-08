@@ -1,0 +1,37 @@
+#version 460 core
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#define M_PI 3.14159265358979323846
+#define NUM_PARTICLES 1000
+
+layout(std430, binding = 2) buffer PredictedPositionBuffer {
+    vec2 PredictedPositions[];
+};
+layout(std430, binding = 3) buffer DensityBuffer {
+    float Densities[];
+};
+
+float mass = 1.0;
+float smoothingRadius = 0.07;
+
+float smoothingKernel(float dst) {
+    if (dst >= smoothingRadius) return 0.0;
+    float volume = (M_PI * pow(smoothingRadius, 4.0)) / 6.0;
+    return (smoothingRadius - dst) * (smoothingRadius - dst) / volume;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+
+    vec2 pred = PredictedPositions[index];
+    float density = 0.0;
+
+    for (int i = 0; i < NUM_PARTICLES; i++) {
+        vec2 other = PredictedPositions[i];
+        float dst = length(pred - other);
+        float influence = smoothingKernel(dst);
+        density += mass * influence;
+    }
+
+    Densities[index] = density;
+}

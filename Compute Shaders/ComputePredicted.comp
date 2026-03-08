@@ -7,31 +7,25 @@ layout(std430, binding = 0) buffer PositionBuffer {
 layout(std430, binding = 1) buffer VelocityBuffer {
     vec2 velocities[];
 };
-
+layout(std430, binding = 2) buffer PredictedPositionBuffer {
+    vec2 PredictedPositions[];
+};
 uniform float dt;
 vec2 gravity = vec2(0.0, -0.01);
 
-void checkCollisions(inout vec2 pos, inout vec2 vel) {
-    if (pos.y <= -0.8) {
-        pos.y = -0.8;
-        vel.y *= -1.0;
-    }
-}
-void Compute(){
+void main() {
+
     uint index = gl_GlobalInvocationID.x;
 
     vec2 pos = positions[index];
     vec2 vel = velocities[index];
+    vec2 pred = PredictedPositions[index];
 
     vel += dt * gravity;
-    pos += vel;
-    checkCollisions(pos, vel);
+    pred = pos + vel * (1.0/120.0);
 
     positions[index] = pos;
     velocities[index] = vel;
-}
-void main() {
-
-    Compute();
+    PredictedPositions[index] = pred;
 
 }
