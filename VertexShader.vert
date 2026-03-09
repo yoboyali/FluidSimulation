@@ -25,6 +25,6 @@ void main() {
 	vec2 center = positions[particleIndex];
 	vec2 offset = corners[cornerIndex] * radius;
 
-	localPos = corners[cornerIndex];  
+	localPos = corners[cornerIndex];
 	gl_Position = proj * vec4(center + offset, 0.0, 1.0);
 }
