@@ -16,8 +16,6 @@
 #define WindowWidth  1500
 #define WindowHeight 1000
 #define NUM_PARTICLES 2000
-#define PARTICLE_RADIUS 0.01f
-#define Particlespacing 0.3f
 
 WaterSimulator simulator;
 GLFWwindow* window;
@@ -44,6 +42,8 @@ float smoothingRadius  = 0.07;
 float targetDensity    = 400.0;
 float pressureMultiplier = 500.70;
 float viscosityStrength = 0.15;
+float PARTICLE_RADIUS = 0.01f;
+float Particlespacing = 0.3f;
 
 float oldTime = 0.0;
 bool paused = false;
@@ -224,17 +224,20 @@ int main() {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
+
 
     while (!glfwWindowShouldClose(window)) {
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
+        ImGui::SetNextWindowPos(ImVec2(WindowWidth + 10, +20), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_Always);
         ImGui::Begin("Settings");
 
         ImGui::SliderFloat("mass", &mass, 0.0f, 5.0f);
@@ -242,27 +245,33 @@ int main() {
         ImGui::SliderFloat("Target Density", &targetDensity, 0.0f, 1000.0f);
         ImGui::SliderFloat("Pressure Multiplier", &pressureMultiplier, 0.0f, 500.0f);
         ImGui::SliderFloat("Viscosity Strength", &viscosityStrength , 0.0f, 1.0f);
+        ImGui::SliderFloat("Particle Radius", &PARTICLE_RADIUS , 0.0f, 0.6f);
+        ImGui::SliderFloat("Particle Spacing", &Particlespacing , 0.0f, 1.0f);
         if (ImGui::Button("Reset Simulation")) {
             resetSimulation();
         }
         ImGui::SameLine();
 
-        if (ImGui::Button("Pause")) {
+        const char* Text = paused ? "PAUSED" : "RUNNING";
+        if (ImGui::Button(Text)) {
             paused = !paused;
         }
         if (ImGui::Button("Close Simulation")) {
             break;
         }
-        ImGui::SameLine();
-        ImGui::Text(paused ? "PAUSED" : "RUNNING");
-        ImGui::SameLine();
-
+        ImGui::Text("FPS: %.1f", io.Framerate);
+        ImGui::Text("Frame time: %.3f ms", 1000.0f / io.Framerate);
         ImGui::End();
             display();
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            GLFWwindow* backup = glfwGetCurrentContext();
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+            glfwMakeContextCurrent(backup);
+        }
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
