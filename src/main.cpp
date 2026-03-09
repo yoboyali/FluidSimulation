@@ -44,7 +44,7 @@ float pressureMultiplier = 500.70;
 float viscosityStrength = 0.15;
 float PARTICLE_RADIUS = 0.01f;
 float Particlespacing = 0.3f;
-
+float gravity = 1.0;
 float oldTime = 0.0;
 bool paused = false;
 
@@ -135,7 +135,7 @@ void init() {
 
     glGenVertexArrays(1, &VAO);
 
-    shaderProgram   = createShaderProgram("VertexShader.vert", "FragmentShader.frag");
+    shaderProgram   = createShaderProgram("Shaders/VertexShader.vert", "Shaders/FragmentShader.frag");
     compute_predict = createComputeProgram("ComputeShaders/Predicted.comp");
     compute_density = createComputeProgram("ComputeShaders/Density.comp");
     compute_force   = createComputeProgram("ComputeShaders/Force.comp");
@@ -156,7 +156,8 @@ void display() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
     glUniform1f(glGetUniformLocation(compute_predict, "dt"), dt);
-    glUniform2f(glGetUniformLocation(compute_predict, "gravity"), 0.0f, -1.0f);
+    glUniform1f(glGetUniformLocation(compute_predict, "gravity"), gravity);
+    glUniform2f(glGetUniformLocation(compute_predict, "down"), 0.0f, -1.0f);
     glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -240,10 +241,11 @@ int main() {
         ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_Always);
         ImGui::Begin("Settings");
 
-        ImGui::SliderFloat("mass", &mass, 0.0f, 5.0f);
+        ImGui::SliderFloat("Gravity", &gravity, -10.0f, 10.0f);
+        ImGui::SliderFloat("Mass", &mass, 0.0f, 5.0f);
         ImGui::SliderFloat("Smoothing Radius", &smoothingRadius, 0.0f, 1.0f);
         ImGui::SliderFloat("Target Density", &targetDensity, 0.0f, 1000.0f);
-        ImGui::SliderFloat("Pressure Multiplier", &pressureMultiplier, 0.0f, 500.0f);
+        ImGui::SliderFloat("Pressure Multiplier", &pressureMultiplier, 0.0f, 1500.0f);
         ImGui::SliderFloat("Viscosity Strength", &viscosityStrength , 0.0f, 1.0f);
         ImGui::SliderFloat("Particle Radius", &PARTICLE_RADIUS , 0.0f, 0.6f);
         ImGui::SliderFloat("Particle Spacing", &Particlespacing , 0.0f, 1.0f);

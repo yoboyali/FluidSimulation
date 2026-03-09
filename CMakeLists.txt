@@ -22,13 +22,13 @@ else()
 endif()
 
 add_executable(FluidSimulation
-        main.cpp
-        WaterSimulator.cpp
-        WaterSimulator.h
-        SpatialHash.cpp
-        SpatialHash.h
-        vector.cpp
-        vector.h
+        src/main.cpp
+        src/WaterSimulator.cpp
+        src/WaterSimulator.h
+        src/SpatialHash.cpp
+        src/SpatialHash.h
+        src/vector.cpp
+        src/vector.h
         glad/src/glad.c
         imgui/imgui.cpp
         imgui/imgui_draw.cpp

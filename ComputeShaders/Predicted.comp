@@ -11,7 +11,8 @@ layout(std430, binding = 2) buffer PredictedPositionBuffer {
     vec2 PredictedPositions[];
 };
 uniform float dt;
-uniform vec2 gravity;
+uniform float gravity;
+uniform vec2 down;
 
 void main() {
 
@@ -21,7 +22,7 @@ void main() {
     vec2 vel = velocities[index];
     vec2 pred = PredictedPositions[index];
 
-    vel += dt * gravity;
+    vel += dt * down * gravity;
     pred = pos + vel * (1.0/120.0);
 
     positions[index] = pos;
