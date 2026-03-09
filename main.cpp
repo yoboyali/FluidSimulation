@@ -11,19 +11,25 @@
 #include "WaterSimulator.h"
 #define WindowWidth  1500
 #define WindowHeight 1000
-#define NUM_PARTICLES 30
+#define NUM_PARTICLES 1000
 #define PARTICLE_RADIUS 0.02f
 #define Particlespacing 0.3f
 
 WaterSimulator simulator;
 
 GLuint shaderProgram;
-GLuint computeProgram;
+
+GLuint compute_predict;
+GLuint compute_density;
+GLuint compute_force;
+GLuint compute_apply;
+
 GLuint VAO;
 GLuint posSSBO;
 GLuint predSSBO;
 GLuint velSSBO;
 GLuint densSSBO;
+
 glm::mat4 proj;
 
 std::string loadShaderSource(const char* filepath) {
@@ -107,8 +113,11 @@ void init() {
 
     glGenVertexArrays(1, &VAO);
 
-    shaderProgram  = createShaderProgram("VertexShader.vert", "FragmentShader.frag");
-    computeProgram = createComputeProgram("ComputePredicted.comp");
+    shaderProgram   = createShaderProgram("VertexShader.vert", "FragmentShader.frag");
+    compute_predict = createComputeProgram("ComputeShaders/Predicted.comp");
+    compute_density = createComputeProgram("ComputeShaders/Density.comp");
+    compute_force   = createComputeProgram("ComputeShaders/Force.comp");
+    compute_apply   = createComputeProgram("ComputeShaders/Apply.comp");
 
     proj = glm::ortho(-(float)WindowWidth/WindowHeight,
                        (float)WindowWidth/WindowHeight,
@@ -118,11 +127,35 @@ void init() {
 void display() {
     static float dt = 0.016f;
 
-    glUseProgram(computeProgram);
+
+    glUseProgram(compute_predict);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
-    glUniform1f(glGetUniformLocation(computeProgram, "dt"), dt);
-    glDispatchCompute(NUM_PARTICLES, 1, 1);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
+    glUniform1f(glGetUniformLocation(compute_predict, "dt"), dt);
+    glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glUseProgram(compute_density);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, predSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, densSSBO);
+    glUniform1f(glGetUniformLocation(compute_density, "dt"), dt);
+    glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glUseProgram(compute_force);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, predSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, densSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, velSSBO);
+    glUniform1f(glGetUniformLocation(compute_force, "dt"), dt);
+    glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glUseProgram(compute_apply);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, velSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, posSSBO);
+    glUniform1f(glGetUniformLocation(compute_apply, "dt"), dt);
+    glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
