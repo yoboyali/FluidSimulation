@@ -1,6 +1,7 @@
 #include <fstream>
 #include <glad/glad.h>
-#include <GL/freeglut.h>
+
+#include <GLFW/glfw3.h>
 #include <glm.hpp>
 #include <iostream>
 #include <sstream>
@@ -16,6 +17,7 @@
 #define Particlespacing 0.3f
 
 WaterSimulator simulator;
+GLFWwindow* window;
 
 GLuint shaderProgram;
 
@@ -142,7 +144,7 @@ void init() {
 
 void display() {
 
-    float time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+    float time = glfwGetTime();
     float dt = time - oldTime;
 
     glUseProgram(compute_predict);
@@ -194,28 +196,31 @@ void display() {
     glUniform1f       (glGetUniformLocation(shaderProgram, "radius"), PARTICLE_RADIUS);
     glBindVertexArray(VAO);
     glDrawArrays(GL_TRIANGLES, 0, NUM_PARTICLES * 6);
-
-    glutSwapBuffers();
-    glutPostRedisplay();
     oldTime = time;
 
 }
 
-int main(int argc, char** argv) {
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(WindowWidth, WindowHeight);
-    glutInitWindowPosition(0, 0);
-    glutCreateWindow("Simulation!");
 
-    if (!gladLoadGL()) {
-        std::cerr << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
 
+int main() {
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    window = glfwCreateWindow(WindowWidth, WindowHeight, "Simulation!", NULL, NULL);
+    glfwMakeContextCurrent(window);
+
+    gladLoadGL();
     glViewport(0, 0, WindowWidth, WindowHeight);
     init();
-    glutDisplayFunc(display);
-    glutMainLoop();
+
+    while (!glfwWindowShouldClose(window)) {
+        display();
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    glfwTerminate();
     return 0;
 }
