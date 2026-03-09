@@ -29,14 +29,18 @@ GLuint posSSBO;
 GLuint predSSBO;
 GLuint velSSBO;
 GLuint densSSBO;
+GLuint ColSSBO;
 
 glm::mat4 proj;
+glm::vec4 particleColor;
 
 float mass             = 0.5;
 float smoothingRadius  = 0.07;
 float targetDensity    = 400.0;
 float pressureMultiplier = 500.70;
 float viscosityStrength = 0.15;
+
+float oldTime = 0.0;
 
 std::string loadShaderSource(const char* filepath) {
     std::ifstream file(filepath);
@@ -86,6 +90,7 @@ void init() {
     std::vector<glm::vec2> velocities(NUM_PARTICLES, glm::vec2(0.0f));
     std::vector<glm::vec2> PredictedPositions(NUM_PARTICLES, glm::vec2(0.0f));
     std::vector<glm::vec2> Densities(NUM_PARTICLES, glm::vec2(0.0f));
+    std::vector<glm::vec4> Colors(NUM_PARTICLES, glm::vec4(0.0f));
 
 
     int ParticlesperRow = (int) sqrt(NUM_PARTICLES);
@@ -117,6 +122,11 @@ void init() {
     glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), Densities.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, densSSBO);
 
+    glGenBuffers(1, &ColSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ColSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec4), Colors.data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
+
     glGenVertexArrays(1, &VAO);
 
     shaderProgram   = createShaderProgram("VertexShader.vert", "FragmentShader.frag");
@@ -131,8 +141,9 @@ void init() {
 }
 
 void display() {
-    static float dt = 0.016f;
 
+    float time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+    float dt = time - oldTime;
 
     glUseProgram(compute_predict);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
@@ -144,8 +155,8 @@ void display() {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glUseProgram(compute_density);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, predSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, densSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, densSSBO);
     glUniform1ui(glGetUniformLocation(compute_density, "NUM_PARTICLES"), NUM_PARTICLES);
     glUniform1f(glGetUniformLocation(compute_density, "dt"), dt);
     glUniform1f(glGetUniformLocation(compute_density, "mass"), mass);
@@ -154,9 +165,9 @@ void display() {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glUseProgram(compute_force);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, predSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, densSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, velSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, densSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
     glUniform1ui(glGetUniformLocation(compute_force, "NUM_PARTICLES"), NUM_PARTICLES);
     glUniform1f(glGetUniformLocation(compute_force, "dt"), dt);
     glUniform1f(glGetUniformLocation(compute_force, "mass"), mass);
@@ -168,8 +179,9 @@ void display() {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glUseProgram(compute_apply);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, velSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, posSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
     glUniform1f(glGetUniformLocation(compute_apply, "dt"), dt);
     glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -177,6 +189,7 @@ void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(shaderProgram);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "proj"),   1, GL_FALSE, glm::value_ptr(proj));
     glUniform1f       (glGetUniformLocation(shaderProgram, "radius"), PARTICLE_RADIUS);
     glBindVertexArray(VAO);
@@ -184,6 +197,8 @@ void display() {
 
     glutSwapBuffers();
     glutPostRedisplay();
+    oldTime = time;
+
 }
 
 int main(int argc, char** argv) {

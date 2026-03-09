@@ -3,11 +3,15 @@
 layout(std430, binding = 0) buffer PositionBuffer {
 	vec2 positions[];
 };
+layout(std430, binding = 4) buffer ColorBuffer {
+	vec4 Colors[];
+};
 
 uniform mat4 proj;
 uniform float radius;
 
 out vec2 localPos;
+flat out vec4 particleColor;
 
 void main() {
 	uint particleIndex = gl_VertexID / 6;
@@ -27,4 +31,5 @@ void main() {
 
 	localPos = corners[cornerIndex];
 	gl_Position = proj * vec4(center + offset, 0.0, 1.0);
+	particleColor = Colors[particleIndex];
 }

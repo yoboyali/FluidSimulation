@@ -3,13 +3,13 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 #define M_PI 3.14159265358979323846
 
-layout(std430, binding = 0) buffer PredictedPositionBuffer {
+layout(std430, binding = 2) buffer PredictedPositionBuffer {
     vec2 PredictedPositions[];
 };
-layout(std430, binding = 1) buffer DensityBuffer {
+layout(std430, binding = 3) buffer DensityBuffer {
     float Densities[];
 };
-layout(std430, binding = 2) buffer VelocityBuffer {
+layout(std430, binding = 1) buffer VelocityBuffer {
     vec2 velocities[];
 };
 
