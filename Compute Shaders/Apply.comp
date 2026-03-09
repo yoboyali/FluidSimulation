@@ -10,11 +10,34 @@ layout(std430, binding = 1) buffer VelocityBuffer {
 
 uniform float dt;
 
-void main() {
+float damping = 0.2;
+float yBorder = 0.9;
+float xBorder = 1.4;
 
+void checkCollisions(uint index) {
+    vec2 pos = positions[index];
+
+    if (pos.y <= -yBorder) {
+        positions[index].y  = -yBorder;
+        velocities[index].y *= -damping;
+    }
+    if (pos.y >= yBorder) {
+        positions[index].y  = yBorder;
+        velocities[index].y *= -damping;
+    }
+    if (pos.x <= -xBorder) {
+        positions[index].x  = -xBorder;
+        velocities[index].x *= -damping;
+    }
+    if (pos.x >= xBorder) {
+        positions[index].x  = xBorder;
+        velocities[index].x *= -damping;
+    }
+}
+
+void main() {
     uint index = gl_GlobalInvocationID.x;
 
-    positions[i] = positions[i] + (velocities[i] * dt);
-    CheckCollision();
-
+    positions[index] += velocities[index] * dt;
+    checkCollisions(index);
 }
