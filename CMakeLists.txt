@@ -29,14 +29,21 @@ add_executable(FluidSimulation
         SpatialHash.h
         vector.cpp
         vector.h
-        glad/src/glad.c)
+        glad/src/glad.c
+        imgui/imgui.cpp
+        imgui/imgui_draw.cpp
+        imgui/imgui_tables.cpp
+        imgui/imgui_widgets.cpp
+        imgui/imgui_impl_glfw.cpp
+        imgui/imgui_impl_opengl3.cpp
+)
 
 target_include_directories(FluidSimulation PRIVATE
+        ${GLFW_INCLUDE_DIR}
         ${GLUT_INCLUDE_DIR}
         ${CMAKE_SOURCE_DIR}/glad/include
-        ${GLFW_INCLUDE_DIR}
-        ${CMAKE_SOURCE_DIR}/glad/include
         ${CMAKE_SOURCE_DIR}/glm
+        ${CMAKE_SOURCE_DIR}/imgui
 )
 
 target_link_libraries(FluidSimulation

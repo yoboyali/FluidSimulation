@@ -5,6 +5,7 @@
 #ifndef WATERSIMULATOR_H
 #define WATERSIMULATOR_H
 #include <GL/freeglut.h>
+#include <GLFW/glfw3.h>
 #include <random>
 #define Numofparticles 2000
 

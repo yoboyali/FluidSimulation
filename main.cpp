@@ -1,6 +1,9 @@
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 #include <fstream>
 #include <glad/glad.h>
-
 #include <GLFW/glfw3.h>
 #include <glm.hpp>
 #include <iostream>
@@ -43,6 +46,7 @@ float pressureMultiplier = 500.70;
 float viscosityStrength = 0.15;
 
 float oldTime = 0.0;
+bool paused = false;
 
 std::string loadShaderSource(const char* filepath) {
     std::ifstream file(filepath);
@@ -145,7 +149,7 @@ void init() {
 void display() {
 
     float time = glfwGetTime();
-    float dt = time - oldTime;
+    float dt = paused ? 0.0f : time - oldTime;
 
     glUseProgram(compute_predict);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
@@ -200,6 +204,9 @@ void display() {
 
 }
 
+void resetSimulation() {
+    init();
+}
 
 
 int main() {
@@ -215,12 +222,54 @@ int main() {
     glViewport(0, 0, WindowWidth, WindowHeight);
     init();
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 460");
+
     while (!glfwWindowShouldClose(window)) {
-        display();
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::Begin("Settings");
+
+        ImGui::SliderFloat("mass", &mass, 0.0f, 5.0f);
+        ImGui::SliderFloat("Smoothing Radius", &smoothingRadius, 0.0f, 1.0f);
+        ImGui::SliderFloat("Target Density", &targetDensity, 0.0f, 1000.0f);
+        ImGui::SliderFloat("Pressure Multiplier", &pressureMultiplier, 0.0f, 500.0f);
+        ImGui::SliderFloat("Viscosity Strength", &viscosityStrength , 0.0f, 1.0f);
+        if (ImGui::Button("Reset Simulation")) {
+            resetSimulation();
+        }
+        ImGui::SameLine();
+
+        if (ImGui::Button("Pause")) {
+            paused = !paused;
+        }
+        if (ImGui::Button("Close Simulation")) {
+            break;
+        }
+        ImGui::SameLine();
+        ImGui::Text(paused ? "PAUSED" : "RUNNING");
+        ImGui::SameLine();
+
+        ImGui::End();
+            display();
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    glfwTerminate();
     glfwTerminate();
     return 0;
 }
