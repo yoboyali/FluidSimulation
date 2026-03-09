@@ -120,6 +120,7 @@ double WaterSimulator::SmoothingKernel(double smoothingradius , double dst)
     float volume = (M_PI * pow(smoothingradius , 4)) / 6;
     return (smoothingradius - dst) * (smoothingradius - dst) / volume;
 }
+
 double WaterSimulator::SmoothingKernelDerivative(float smoothingradius, double dst)
 {
     if (dst >= smoothingradius) return 0;
@@ -150,13 +151,6 @@ void WaterSimulator::CheckCollision(vector2 pos ,int index)
         velocities[index].x *= -1 * damping;
     }
 
-}
-void WaterSimulator::updateDensities()
-{
-    spatialHash->create(PredictedPositions , Numofparticles);
-    for (int i = 0; i < Numofparticles ; i++) {
-        densities[i] = CalculateDensity(i);
-    }
 }
 vector2 WaterSimulator::calculatePressureForce(int index)
 {
@@ -221,6 +215,7 @@ vector3 WaterSimulator::EvaluateGradient(float t)
 
     return gradient[gradientSize - 1].color;
 }
+
 float WaterSimulator::ViscositySmoothingKernel(float dst)
 {
     if (dst < smoothingradius)
@@ -248,23 +243,7 @@ vector2 WaterSimulator::CalculateViscosityForce(int index)
 
     return viscosityForce * ViscosityStrength;
 }
-void WaterSimulator::MouseCallBack(int button, int state, int x, int y)
-{
-    vector2 InteractionForce = {0};
-    vector2 zero = {0};
-    float radius = 0.05;
-    float eps = std::numeric_limits<float>::epsilon();
-    vector2 Inputpos = {(float)x , (float)y};
-    vector2 Offset = Inputpos;
-    float sqrDst = dot(Offset , Offset);
-    if (sqrDst < radius * radius) {
-        float dst = std::sqrt(sqrDst);
-        vector2 dirToInputPoint = dst <= eps ? zero : Offset / dst;
-        float centre = 1 - dst / radius;
 
-        //InteractionForce += (dirToInputPoint * strenght - velocities[i]) * centre;
-    }
-}
 WaterSimulator::WaterSimulator()
 {
     int ParticlesperRow = (int) sqrt(Numofparticles);
