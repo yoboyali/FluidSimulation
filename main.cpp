@@ -11,8 +11,8 @@
 #include "WaterSimulator.h"
 #define WindowWidth  1500
 #define WindowHeight 1000
-#define NUM_PARTICLES 1000
-#define PARTICLE_RADIUS 0.02f
+#define NUM_PARTICLES 2000
+#define PARTICLE_RADIUS 0.01f
 #define Particlespacing 0.3f
 
 WaterSimulator simulator;
@@ -31,6 +31,12 @@ GLuint velSSBO;
 GLuint densSSBO;
 
 glm::mat4 proj;
+
+float mass             = 0.5;
+float smoothingRadius  = 0.07;
+float targetDensity    = 400.0;
+float pressureMultiplier = 500.70;
+float viscosityStrength = 0.15;
 
 std::string loadShaderSource(const char* filepath) {
     std::ifstream file(filepath);
@@ -133,13 +139,17 @@ void display() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
     glUniform1f(glGetUniformLocation(compute_predict, "dt"), dt);
+    glUniform2f(glGetUniformLocation(compute_predict, "gravity"), 0.0f, -1.0f);
     glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glUseProgram(compute_density);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, predSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, densSSBO);
+    glUniform1ui(glGetUniformLocation(compute_density, "NUM_PARTICLES"), NUM_PARTICLES);
     glUniform1f(glGetUniformLocation(compute_density, "dt"), dt);
+    glUniform1f(glGetUniformLocation(compute_density, "mass"), mass);
+    glUniform1f(glGetUniformLocation(compute_density, "smoothingRadius"), smoothingRadius);
     glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -147,7 +157,13 @@ void display() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, predSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, densSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, velSSBO);
+    glUniform1ui(glGetUniformLocation(compute_force, "NUM_PARTICLES"), NUM_PARTICLES);
     glUniform1f(glGetUniformLocation(compute_force, "dt"), dt);
+    glUniform1f(glGetUniformLocation(compute_force, "mass"), mass);
+    glUniform1f(glGetUniformLocation(compute_force, "smoothingRadius"), smoothingRadius);
+    glUniform1f(glGetUniformLocation(compute_force, "targetDensity"), targetDensity);
+    glUniform1f(glGetUniformLocation(compute_force, "pressureMultiplier"), pressureMultiplier);
+    glUniform1f(glGetUniformLocation(compute_force, "viscosityStrength"), viscosityStrength);
     glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 

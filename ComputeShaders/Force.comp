@@ -2,7 +2,6 @@
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 #define M_PI 3.14159265358979323846
-#define NUM_PARTICLES 1000
 
 layout(std430, binding = 0) buffer PredictedPositionBuffer {
     vec2 PredictedPositions[];
@@ -15,13 +14,13 @@ layout(std430, binding = 2) buffer VelocityBuffer {
 };
 
 uniform float dt;
+uniform uint NUM_PARTICLES;
+uniform float mass;
+uniform float smoothingRadius;
+uniform float targetDensity;
+uniform float pressureMultiplier;
+uniform float viscosityStrength;
 
-
-float mass             = 1.0;
-float smoothingRadius  = 0.07;
-float targetDensity    = 400.0;
-float pressureMultiplier = 500.70;
-float viscosityStrength = 0.15;
 float Poly6ScalingFactor = 4.0 / (M_PI * pow(smoothingRadius, 8.0));
 
 float smoothingKernelDerivative(float dst) {
