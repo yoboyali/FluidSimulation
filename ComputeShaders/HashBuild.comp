@@ -1,0 +1,45 @@
+#version 460 core
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 5) buffer CellStartBuffer {
+    int cellStart[];
+};
+layout(std430, binding = 6) buffer CellEntriesBuffer {
+    int cellEntries[];
+};
+layout(std430, binding = 2) buffer PredictedPositionBuffer {
+    vec2 PredictedPositions[];
+};
+
+uniform uint NUM_PARTICLES;
+uniform float Spacing;
+uniform uint tableSize;
+
+uint hashCoords(uint x, uint y) {
+    uint hash = (x * 92837111u) + (y * 689287499u);
+    return hash % tableSize;
+}
+
+vec2 intCoord(vec2 position) {
+    return floor(position / Spacing);
+}
+
+uint hashPosition(int index) {
+    vec2 coord = intCoord(PredictedPositions[index]);
+    return hashCoords(uint(coord.x), uint(coord.y));
+}
+
+void main() {
+    int start = 0;
+    for (int i = 0; i < int(tableSize) * 2; i++) {
+        start += cellStart[i];
+        cellStart[i] = start;
+    }
+    cellStart[tableSize] = start;
+
+    for (int i = 0; i < int(tableSize); i++) {
+        int h = int(hashPosition(i));
+        cellStart[h]--;
+        cellEntries[cellStart[h]] = i;
+    }
+}

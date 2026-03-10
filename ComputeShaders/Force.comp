@@ -3,14 +3,20 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 #define M_PI 3.14159265358979323846
 
+layout(std430, binding = 1) buffer VelocityBuffer {
+    vec2 velocities[];
+};
 layout(std430, binding = 2) buffer PredictedPositionBuffer {
     vec2 PredictedPositions[];
 };
 layout(std430, binding = 3) buffer DensityBuffer {
     float Densities[];
 };
-layout(std430, binding = 1) buffer VelocityBuffer {
-    vec2 velocities[];
+layout(std430, binding = 5) buffer CellStartBuffer {
+    int cellStart[];
+};
+layout(std430, binding = 6) buffer CellEntriesBuffer {
+    int cellEntries[];
 };
 
 uniform float dt;
@@ -20,8 +26,22 @@ uniform float smoothingRadius;
 uniform float targetDensity;
 uniform float pressureMultiplier;
 uniform float viscosityStrength;
+uniform float Spacing;
+uniform uint tableSize;
 
-float Poly6ScalingFactor = 4.0 / (M_PI * pow(smoothingRadius, 8.0));
+uint hashCoords(uint x, uint y) {
+    uint hash = (x * 92837111u) + (y * 689287499u);
+    return hash % tableSize;
+}
+
+vec2 intCoord(vec2 position) {
+    return floor(position / Spacing);
+}
+
+uint hashPosition(int index) {
+    vec2 coord = intCoord(PredictedPositions[index]);
+    return hashCoords(uint(coord.x), uint(coord.y));
+}
 
 float smoothingKernelDerivative(float dst) {
     if (dst >= smoothingRadius) return 0.0;
@@ -30,11 +50,11 @@ float smoothingKernelDerivative(float dst) {
 }
 
 float convertDensityToPressure(float density) {
-    float densityError = density - targetDensity;
-    return densityError * pressureMultiplier;
+    return (density - targetDensity) * pressureMultiplier;
 }
 
 float viscositySmoothingKernel(float dst) {
+    float Poly6ScalingFactor = 4.0 / (M_PI * pow(smoothingRadius, 8.0));
     if (dst < smoothingRadius) {
         float v = smoothingRadius * smoothingRadius - dst * dst;
         return v * v * v * Poly6ScalingFactor;
@@ -42,46 +62,61 @@ float viscositySmoothingKernel(float dst) {
     return 0.0;
 }
 
-vec2 calculateViscosityForce(uint index) {
-    vec2 viscosityForce = vec2(0.0, 0.0);
-    vec2 position = PredictedPositions[index];
+void calculateViscosityForce(uint index, int neighborIndex, inout vec2 viscosityForce) {
+    if (uint(neighborIndex) == index) return;
+    float dst = length(PredictedPositions[index] - PredictedPositions[neighborIndex]);
+    float influence = viscositySmoothingKernel(dst);
+    viscosityForce += (velocities[neighborIndex] - velocities[index]) * influence * (mass / Densities[neighborIndex]);
+}
 
-    for (int i = 0; i < NUM_PARTICLES; i++) {
-        if (uint(i) == index) continue;
-        float dst = length(position - PredictedPositions[i]);
-        float influence = viscositySmoothingKernel(dst);
-        viscosityForce += (velocities[i] - velocities[index]) * influence * (mass / Densities[i]);
+void calculatePressureForce(uint index, int neighborIndex, inout vec2 pressureForce) {
+    if (uint(neighborIndex) == index) return;
+
+    vec2  offset = PredictedPositions[index] - PredictedPositions[neighborIndex];
+    float dst    = length(offset);
+    if (dst < 0.0001) return;
+
+    vec2  dir           = offset / dst;
+    float slope         = smoothingKernelDerivative(dst);
+    float pressure_i    = convertDensityToPressure(Densities[index]);
+    float pressure_j    = convertDensityToPressure(Densities[neighborIndex]);
+    float pressure_term = (pressure_i / (Densities[index]        * Densities[index]) +
+    pressure_j / (Densities[neighborIndex] * Densities[neighborIndex]));
+    pressureForce -= dir * mass * mass * pressure_term * slope;
+}
+
+void queryNeighbors(uint index, float maxDist) {
+    vec2 pos           = PredictedPositions[index];
+    vec2 viscosityForce = vec2(0.0);
+    vec2 pressureForce  = vec2(0.0);
+
+    int x0 = int(floor((pos.x - maxDist) / Spacing));
+    int y0 = int(floor((pos.y - maxDist) / Spacing));
+    int x1 = int(floor((pos.x + maxDist) / Spacing));
+    int y1 = int(floor((pos.y + maxDist) / Spacing));
+
+    for (int xi = x0; xi <= x1; xi++) {
+        for (int yi = y0; yi <= y1; yi++) {
+            uint h = hashCoords(uint(xi), uint(yi));
+            if (h + 1u > tableSize) continue;
+            int start = cellStart[h];
+            int end   = cellStart[h + 1];
+            if (start < 0 || end < 0 || end > int(NUM_PARTICLES)) continue;
+            for (int i = start; i < end; i++) {
+                int neighborIndex = cellEntries[i];
+                if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;
+                calculatePressureForce(index, neighborIndex, pressureForce);
+                calculateViscosityForce(index, neighborIndex, viscosityForce);            }
+        }
     }
 
-    return viscosityForce * viscosityStrength;
+    vec2 pressureAcc = pressureForce / Densities[index];
+    viscosityForce   = viscosityForce * viscosityStrength;
+    velocities[index] += (pressureAcc + viscosityForce / mass) * dt;
 }
 
 void main() {
     uint index = gl_GlobalInvocationID.x;
     if (index >= NUM_PARTICLES) return;
-
-    vec2 pred         = PredictedPositions[index];
-    vec2 pressureForce = vec2(0.0, 0.0);
-
-    for (int i = 0; i < NUM_PARTICLES; i++) {
-        if (uint(i) == index) continue;
-
-        vec2  offset = pred - PredictedPositions[i];
-        float dst    = length(offset);
-        if (dst < 0.0001) continue;
-
-        vec2  dir      = offset / dst;
-        float slope    = smoothingKernelDerivative(dst);
-
-        float pressure_i = convertDensityToPressure(Densities[index]);
-        float pressure_j = convertDensityToPressure(Densities[i]);
-        float pressure_term = (pressure_i / (Densities[index] * Densities[index]) +
-        pressure_j / (Densities[i]     * Densities[i]));
-
-        pressureForce -= dir * mass * mass * pressure_term * slope;
-    }
-
-    vec2 pressureAcc   = pressureForce / Densities[index];
-    vec2 viscosityForce = calculateViscosityForce(index);
-    velocities[index]  += (pressureAcc + viscosityForce / mass) * dt;
+    queryNeighbors(index, smoothingRadius);
 }

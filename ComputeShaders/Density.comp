@@ -9,11 +9,33 @@ layout(std430, binding = 2) buffer PredictedPositionBuffer {
 layout(std430, binding = 3) buffer DensityBuffer {
     float Densities[];
 };
+layout(std430, binding = 5) buffer CellStartBuffer {
+    int cellStart[];
+};
+layout(std430, binding = 6) buffer CellEntriesBuffer {
+    int cellEntries[];
+};
 
 uniform float mass;
 uniform float smoothingRadius;
 uniform uint NUM_PARTICLES;
 
+uniform float Spacing;
+uniform uint tableSize;
+
+uint hashCoords(uint x, uint y) {
+    uint hash = (x * 92837111u) + (y * 689287499u);
+    return hash % tableSize;
+}
+
+vec2 intCoord(vec2 position) {
+    return floor(position / Spacing);
+}
+
+uint hashPosition(int index) {
+    vec2 coord = intCoord(PredictedPositions[index]);
+    return hashCoords(uint(coord.x), uint(coord.y));
+}
 
 float smoothingKernel(float dst) {
     if (dst >= smoothingRadius) return 0.0;
@@ -21,18 +43,35 @@ float smoothingKernel(float dst) {
     return (smoothingRadius - dst) * (smoothingRadius - dst) / volume;
 }
 
+void queryNeighbors(uint index, float maxDist) {
+    float density = 0.0;
+    vec2 pos = PredictedPositions[index];
+
+    int x0 = int(floor((pos.x - maxDist) / Spacing));
+    int y0 = int(floor((pos.y - maxDist) / Spacing));
+    int x1 = int(floor((pos.x + maxDist) / Spacing));
+    int y1 = int(floor((pos.y + maxDist) / Spacing));
+
+    for (int xi = x0; xi <= x1; xi++) {
+        for (int yi = y0; yi <= y1; yi++) {
+            uint h = hashCoords(uint(xi), uint(yi));
+            if (h + 1u > tableSize) continue;
+            int start = cellStart[h];
+            int end   = cellStart[h + 1];
+            if (start < 0 || end < 0 || end > int(NUM_PARTICLES)) continue;
+            for (int i = start; i < end; i++) {
+                int neighborIndex = cellEntries[i];
+                if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;
+                float dst = length(pos - PredictedPositions[neighborIndex]);
+                float influence = smoothingKernel(dst);
+                density += mass * influence;            }
+        }
+    }
+    Densities[index] = density;
+}
+
 void main() {
     uint index = gl_GlobalInvocationID.x;
-
-    vec2 pred = PredictedPositions[index];
-    float density = 0.0;
-
-    for (int i = 0; i < NUM_PARTICLES; i++) {
-        vec2 other = PredictedPositions[i];
-        float dst = length(pred - other);
-        float influence = smoothingKernel(dst);
-        density += mass * influence;
-    }
-
-    Densities[index] = density;
+    if (index >= NUM_PARTICLES) return;
+    queryNeighbors(index, smoothingRadius);
 }
