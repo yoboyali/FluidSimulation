@@ -41,15 +41,20 @@ GLuint cellEntriesSSBO;
 GLuint queryIdsSSBO;
 
 glm::mat4 proj;
+glm::mat4 view = glm::lookAt(
+    glm::vec3(0.0f, 0.0f, 5.0f),
+    glm::vec3(0.0f, 0.0f, 0.0f),
+    glm::vec3(0.0f, 1.0f, 0.0f)
+);
 glm::vec4 particleColor;
 
-float mass             = 0.5;
-float smoothingRadius  = 0.03;
+float mass             = 1.0;
+float smoothingRadius  = 0.1;
 float targetDensity    = 2.0;
 float pressureMultiplier = 600.0;
 float viscosityStrength = 0.15;
-float PARTICLE_RADIUS = 0.0081f;
-float Particlespacing = 0.077f;
+float PARTICLE_RADIUS = 0.02f;
+float Particlespacing = 0.007f;
 float gravity = 0.0;
 float oldTime = 0.0;
 int tableSize = NUM_PARTICLES * 2;
@@ -95,39 +100,40 @@ GLuint createComputeProgram(const char* path) {
     glDeleteShader(shader);
     return program;
 }
-
 void init() {
-    std::vector<glm::vec2> positions(NUM_PARTICLES);
-    std::vector<glm::vec2> velocities(NUM_PARTICLES, glm::vec2(0.0f));
-    std::vector<glm::vec2> PredictedPositions(NUM_PARTICLES, glm::vec2(0.0f));
+    std::vector<glm::vec4> positions(NUM_PARTICLES);
+    std::vector<glm::vec4> velocities(NUM_PARTICLES, glm::vec4(0.0f));
+    std::vector<glm::vec4> PredictedPositions(NUM_PARTICLES, glm::vec4(0.0f));
     std::vector<float> Densities(NUM_PARTICLES, 0.0f);
-    std::vector<glm::vec4> Colors(NUM_PARTICLES, glm::vec4(0.0f));
+    std::vector<glm::vec4> Colors(NUM_PARTICLES, glm::vec4(0.0 , 0.0 , 1.0 , 0.0));
     std::vector<int> cellEntries(NUM_PARTICLES , 0);
     std::vector<int> queryIds(NUM_PARTICLES , 0);
     std::vector<int> cellStart(tableSize + 1 , 0);
 
-    int ParticlesperRow = (int) sqrt(NUM_PARTICLES);
-    int ParticlesperCol = (NUM_PARTICLES - 1) / ParticlesperRow + 1;
+    int ParticlesperRow = (int)cbrt(NUM_PARTICLES);
+    int ParticlesperCol = ParticlesperRow;
+    int ParticlesperDepth = (NUM_PARTICLES - 1) / (ParticlesperRow * ParticlesperCol) + 1;
     float spacing = PARTICLE_RADIUS * 2 + Particlespacing;
     for (int i = 0; i < NUM_PARTICLES; i++) {
-        float x = ((i % ParticlesperRow - ParticlesperRow / 2 + 0.5) * spacing) / 10;
-        float y = ((i / ParticlesperRow - ParticlesperCol / 2 + 0.5) * spacing) / 10;
-        positions[i] = glm::vec2(x , y);
+        float x = ((i % ParticlesperRow) - ParticlesperRow / 2.0f + 0.5f) * spacing;
+        float y = ((i / ParticlesperRow) % ParticlesperCol - ParticlesperCol / 2.0f + 0.5f) * spacing;
+        float z = ((i / (ParticlesperRow * ParticlesperCol)) - ParticlesperDepth / 2.0f + 0.5f) * spacing;
+        positions[i] = glm::vec4(x, y, z , 0.0);
     }
 
     glGenBuffers(1, &posSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, posSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), positions.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec4), positions.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
 
     glGenBuffers(1, &velSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, velSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), velocities.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec4), velocities.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
 
     glGenBuffers(1, &predSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, predSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), PredictedPositions.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(glm::vec4), PredictedPositions.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
 
     glGenBuffers(1, &densSSBO);
@@ -167,9 +173,10 @@ void init() {
     compute_hashBuild=createComputeProgram("ComputeShaders/HashBuild.comp");
     compute_hashReset=createComputeProgram("ComputeShaders/HashReset.comp");
 
-    proj = glm::ortho(-(float)WindowWidth/WindowHeight,
-                       (float)WindowWidth/WindowHeight,
-                      -1.0f, 1.0f);
+    proj = glm::perspective(glm::radians(60.0f),
+                            (float)WindowWidth / (float)WindowHeight,
+                            0.01f, 100.0f);
+
 }
 
 void display() {
@@ -182,7 +189,8 @@ void display() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
     glUniform1f(glGetUniformLocation(compute_predict, "dt"), dt);
     glUniform1f(glGetUniformLocation(compute_predict, "gravity"), gravity);
-    glUniform2f(glGetUniformLocation(compute_predict, "down"), 0.0f, -1.0f);
+    glUniform3f(glGetUniformLocation(compute_predict, "down"), 0.0f, -1.0f , 0.0);
+    glUniform1ui(glGetUniformLocation(compute_apply, "NUM_PARTICLES"), NUM_PARTICLES);
     glDispatchCompute(NUM_PARTICLES / 256 + 1,  1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -250,6 +258,7 @@ void display() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
     glUniform1f(glGetUniformLocation(compute_apply, "dt"), dt);
+    glUniform1ui(glGetUniformLocation(compute_apply, "NUM_PARTICLES"), NUM_PARTICLES);
     glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -257,8 +266,9 @@ void display() {
     glUseProgram(shaderProgram);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "proj"),   1, GL_FALSE, glm::value_ptr(proj));
-    glUniform1f       (glGetUniformLocation(shaderProgram, "radius"), PARTICLE_RADIUS);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniform1f(glGetUniformLocation(shaderProgram, "radius"), PARTICLE_RADIUS);
     glBindVertexArray(VAO);
     glDrawArrays(GL_TRIANGLES, 0, NUM_PARTICLES * 6);
     oldTime = time;
@@ -284,8 +294,17 @@ int main() {
     glfwMakeContextCurrent(window);
 
     gladLoadGL();
+    std::cout << "GPU: " << glGetString(GL_RENDERER) << std::endl;
+    glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, WindowWidth, WindowHeight);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(0, 0, WindowWidth, WindowHeight);
     init();
+    std::vector<glm::vec4> debugPos(NUM_PARTICLES);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, posSSBO);
+    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, NUM_PARTICLES * sizeof(glm::vec4), debugPos.data());
+    std::cout << "First particle pos: " << debugPos[0].x << " " << debugPos[0].y << " " << debugPos[0].z << std::endl;
+    std::cout << "Last  particle pos: " << debugPos[NUM_PARTICLES-1].x << " " << debugPos[NUM_PARTICLES-1].y << " " << debugPos[NUM_PARTICLES-1].z << std::endl;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

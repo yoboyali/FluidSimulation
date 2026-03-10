@@ -4,7 +4,7 @@ layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 #define M_PI 3.14159265358979323846
 
 layout(std430, binding = 2) buffer PredictedPositionBuffer {
-    vec2 PredictedPositions[];
+    vec4 PredictedPositions[];
 };
 layout(std430, binding = 3) buffer DensityBuffer {
     float Densities[];
@@ -19,57 +19,52 @@ layout(std430, binding = 6) buffer CellEntriesBuffer {
 uniform float mass;
 uniform float smoothingRadius;
 uniform uint NUM_PARTICLES;
-
 uniform float Spacing;
 uniform uint tableSize;
 
-uint hashCoords(uint x, uint y) {
-    uint hash = (x * 92837111u) + (y * 689287499u);
+uint hashCoords(uint x, uint y, uint z) {
+    uint hash = (x * 92837111u) + (y * 689287499u) + (z * 283923481u);
     return hash % tableSize;
 }
 
-vec2 intCoord(vec2 position) {
-    return floor(position / Spacing);
-}
-
 uint hashPosition(int index) {
-    vec2 coord = floor(PredictedPositions[index] / Spacing);
-    ivec2 icoord = ivec2(coord);
-    return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000));
+    vec3 coord = floor(PredictedPositions[index].xyz / Spacing);
+    ivec3 icoord = ivec3(coord);
+    return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000), uint(icoord.z + 100000));
 }
 
 float smoothingKernel(float dst) {
-    if (dst >= smoothingRadius) return 0.0;
-    float volume = (M_PI * pow(smoothingRadius, 4.0)) / 6.0;
-    return (smoothingRadius - dst) * (smoothingRadius - dst) / volume;
+    if (dst < smoothingRadius) {
+        float scale = 15.0 / (2.0 * M_PI * pow(smoothingRadius, 5.0));
+        float v = smoothingRadius - dst;
+        return v * v * scale;
+    }
+    return 0.0;
 }
 
 void queryNeighbors(uint index, float maxDist) {
     float density = 0.0;
-    vec2 pos = PredictedPositions[index];
-
-    int x0 = int(floor((pos.x - maxDist) / Spacing));
-    int y0 = int(floor((pos.y - maxDist) / Spacing));
-    int x1 = int(floor((pos.x + maxDist) / Spacing));
-    int y1 = int(floor((pos.y + maxDist) / Spacing));
-    vec2 center = floor(pos / Spacing);
+    vec3 pos    = PredictedPositions[index].xyz;
+    vec3 center = floor(pos / Spacing);
 
     for (int xi = -1; xi <= 1; xi++) {
         for (int yi = -1; yi <= 1; yi++) {
-            ivec2 cell = ivec2(center) + ivec2(xi, yi);
-            uint h = hashCoords(uint(cell.x + 100000), uint(cell.y + 100000));
+            for (int zi = -1; zi <= 1; zi++) {
+                ivec3 cell = ivec3(center) + ivec3(xi, yi, zi);
+                uint h = hashCoords(uint(cell.x + 100000), uint(cell.y + 100000), uint(cell.z + 100000));
 
-            if (h >= tableSize) continue;
-            int start = cellStart[h];
-            int end   = cellStart[h + 1];
-            if (start < 0 || end < 0 || start > end || end > int(NUM_PARTICLES)) continue;
+                if (h >= tableSize) continue;
+                int start = cellStart[h];
+                int end   = cellStart[h + 1];
+                if (start < 0 || end < 0 || start > end || end > int(NUM_PARTICLES)) continue;
 
-            for (int i = start; i < end; i++) {
-                int neighborIndex = cellEntries[i];
-                if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;
-                float dst = length(pos - PredictedPositions[neighborIndex]);
-                float influence = smoothingKernel(dst);
-                density += mass * influence;            }
+                for (int i = start; i < end; i++) {
+                    int neighborIndex = cellEntries[i];
+                    if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;
+                    float dst = length(pos - PredictedPositions[neighborIndex].xyz);
+                    density += mass * smoothingKernel(dst);
+                }
+            }
         }
     }
     Densities[index] = density;

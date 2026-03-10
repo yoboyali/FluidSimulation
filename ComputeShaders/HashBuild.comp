@@ -8,26 +8,22 @@ layout(std430, binding = 6) buffer CellEntriesBuffer {
     int cellEntries[];
 };
 layout(std430, binding = 2) buffer PredictedPositionBuffer {
-    vec2 PredictedPositions[];
+    vec4 PredictedPositions[];
 };
 
 uniform uint NUM_PARTICLES;
 uniform float Spacing;
 uniform uint tableSize;
 
-uint hashCoords(uint x, uint y) {
-    uint hash = (x * 92837111u) + (y * 689287499u);
+uint hashCoords(uint x, uint y, uint z) {
+    uint hash = (x * 92837111u) + (y * 689287499u) + (z * 283923481u);
     return hash % tableSize;
 }
 
-vec2 intCoord(vec2 position) {
-    return floor(position / Spacing);
-}
-
 uint hashPosition(int index) {
-    vec2 coord = floor(PredictedPositions[index] / Spacing);
-    ivec2 icoord = ivec2(coord);
-    return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000));
+    vec3 coord = floor(PredictedPositions[index].xyz / Spacing);
+    ivec3 icoord = ivec3(coord);
+    return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000), uint(icoord.z + 100000));
 }
 
 void main() {
