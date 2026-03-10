@@ -15,7 +15,7 @@
 #include "WaterSimulator.h"
 #define WindowWidth  1500
 #define WindowHeight 1000
-#define NUM_PARTICLES 500
+#define NUM_PARTICLES 10000
 
 WaterSimulator simulator;
 GLFWwindow* window;
@@ -45,11 +45,11 @@ glm::vec4 particleColor;
 
 float mass             = 0.5;
 float smoothingRadius  = 0.07;
-float targetDensity    = 400.0;
-float pressureMultiplier = 500.70;
+float targetDensity    = 100.0;
+float pressureMultiplier = 1500.0;
 float viscosityStrength = 0.15;
 float PARTICLE_RADIUS = 0.01f;
-float Particlespacing = 0.3f;
+float Particlespacing = 0.077f;
 float gravity = 7.0;
 float oldTime = 0.0;
 int tableSize = NUM_PARTICLES * 2;
@@ -176,7 +176,6 @@ void display() {
 
     float time = glfwGetTime();
     float dt = paused ? 0.0f : time - oldTime;
-    if (dt > 0.033f) dt = 0.033f;  // cap at ~30fps minimum
     glUseProgram(compute_predict);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
@@ -184,7 +183,7 @@ void display() {
     glUniform1f(glGetUniformLocation(compute_predict, "dt"), dt);
     glUniform1f(glGetUniformLocation(compute_predict, "gravity"), gravity);
     glUniform2f(glGetUniformLocation(compute_predict, "down"), 0.0f, -1.0f);
-    glDispatchCompute(NUM_PARTICLES / 64 + 1,  1, 1);
+    glDispatchCompute(NUM_PARTICLES / 256 + 1,  1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glUseProgram(compute_hashReset);
@@ -201,7 +200,7 @@ void display() {
     glUniform1ui(glGetUniformLocation(compute_hashCount, "NUM_PARTICLES"), NUM_PARTICLES);
     glUniform1f(glGetUniformLocation(compute_hashCount, "Spacing"), smoothingRadius);
     glUniform1ui(glGetUniformLocation(compute_hashCount, "tableSize") , tableSize);
-    glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
+    glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glUseProgram(compute_hashBuild);
@@ -225,7 +224,7 @@ void display() {
     glUniform1f(glGetUniformLocation(compute_density, "smoothingRadius"), smoothingRadius);
     glUniform1f(glGetUniformLocation(compute_density, "Spacing"), smoothingRadius);
     glUniform1ui(glGetUniformLocation(compute_density, "tableSize") , tableSize);
-    glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
+    glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glUseProgram(compute_force);
@@ -243,7 +242,7 @@ void display() {
     glUniform1f(glGetUniformLocation(compute_force, "viscosityStrength"), viscosityStrength);
     glUniform1f(glGetUniformLocation(compute_force, "Spacing"), smoothingRadius);
     glUniform1ui(glGetUniformLocation(compute_force, "tableSize") , tableSize);
-    glDispatchCompute(NUM_PARTICLES / 64 + 1, 1, 1);
+    glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glUseProgram(compute_apply);
@@ -251,7 +250,7 @@ void display() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
     glUniform1f(glGetUniformLocation(compute_apply, "dt"), dt);
-    glDispatchCompute(NUM_PARTICLES / 64     + 1, 1, 1);
+    glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

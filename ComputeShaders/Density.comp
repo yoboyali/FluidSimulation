@@ -1,5 +1,5 @@
 #version 460 core
-layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 #define M_PI 3.14159265358979323846
 
@@ -33,8 +33,9 @@ vec2 intCoord(vec2 position) {
 }
 
 uint hashPosition(int index) {
-    vec2 coord = intCoord(PredictedPositions[index]);
-    return hashCoords(uint(coord.x), uint(coord.y));
+    vec2 coord = floor(PredictedPositions[index] / Spacing);
+    ivec2 icoord = ivec2(coord);
+    return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000));
 }
 
 float smoothingKernel(float dst) {
@@ -51,14 +52,18 @@ void queryNeighbors(uint index, float maxDist) {
     int y0 = int(floor((pos.y - maxDist) / Spacing));
     int x1 = int(floor((pos.x + maxDist) / Spacing));
     int y1 = int(floor((pos.y + maxDist) / Spacing));
+    vec2 center = floor(pos / Spacing);
 
-    for (int xi = x0; xi <= x1; xi++) {
-        for (int yi = y0; yi <= y1; yi++) {
-            uint h = hashCoords(uint(xi), uint(yi));
-            if (h + 1u > tableSize) continue;
+    for (int xi = -1; xi <= 1; xi++) {
+        for (int yi = -1; yi <= 1; yi++) {
+            ivec2 cell = ivec2(center) + ivec2(xi, yi);
+            uint h = hashCoords(uint(cell.x + 100000), uint(cell.y + 100000));
+
+            if (h >= tableSize) continue;
             int start = cellStart[h];
             int end   = cellStart[h + 1];
-            if (start < 0 || end < 0 || end > int(NUM_PARTICLES)) continue;
+            if (start < 0 || end < 0 || start > end || end > int(NUM_PARTICLES)) continue;
+
             for (int i = start; i < end; i++) {
                 int neighborIndex = cellEntries[i];
                 if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;

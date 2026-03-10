@@ -25,21 +25,27 @@ vec2 intCoord(vec2 position) {
 }
 
 uint hashPosition(int index) {
-    vec2 coord = intCoord(PredictedPositions[index]);
-    return hashCoords(uint(coord.x), uint(coord.y));
+    vec2 coord = floor(PredictedPositions[index] / Spacing);
+    ivec2 icoord = ivec2(coord);
+    return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000));
 }
 
 void main() {
-    int start = 0;
-    for (int i = 0; i < int(tableSize) * 2; i++) {
-        start += cellStart[i];
-        cellStart[i] = start;
+    int total = 0;
+    for (int i = 0; i <= int(tableSize); i++) {
+        int count = cellStart[i];
+        cellStart[i] = total;
+        total += count;
     }
-    cellStart[tableSize] = start;
 
-    for (int i = 0; i < int(tableSize); i++) {
+    for (int i = 0; i < int(NUM_PARTICLES); i++) {
         int h = int(hashPosition(i));
-        cellStart[h]--;
         cellEntries[cellStart[h]] = i;
+        cellStart[h]++;
     }
+
+    for (int i = int(tableSize); i > 0; i--) {
+        cellStart[i] = cellStart[i - 1];
+    }
+    cellStart[0] = 0;
 }
