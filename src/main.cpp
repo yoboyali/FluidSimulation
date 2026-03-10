@@ -15,7 +15,7 @@
 #include "WaterSimulator.h"
 #define WindowWidth  1500
 #define WindowHeight 1000
-#define NUM_PARTICLES 10000
+#define NUM_PARTICLES 20000
 
 WaterSimulator simulator;
 GLFWwindow* window;
@@ -44,13 +44,13 @@ glm::mat4 proj;
 glm::vec4 particleColor;
 
 float mass             = 0.5;
-float smoothingRadius  = 0.07;
-float targetDensity    = 100.0;
-float pressureMultiplier = 1500.0;
+float smoothingRadius  = 0.03;
+float targetDensity    = 2.0;
+float pressureMultiplier = 600.0;
 float viscosityStrength = 0.15;
-float PARTICLE_RADIUS = 0.01f;
+float PARTICLE_RADIUS = 0.0081f;
 float Particlespacing = 0.077f;
-float gravity = 7.0;
+float gravity = 0.0;
 float oldTime = 0.0;
 int tableSize = NUM_PARTICLES * 2;
 bool paused = true;
@@ -269,6 +269,10 @@ void resetSimulation() {
     init();
 }
 
+extern "C" {
+    __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+    __declspec(dllexport) unsigned long AmdPowerXpressRequestHighPerformance = 1;
+}
 
 int main() {
     glfwInit();
