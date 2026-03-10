@@ -29,6 +29,8 @@ add_executable(FluidSimulation
         src/SpatialHash.h
         src/vector.cpp
         src/vector.h
+        src/Observer.h
+        src/Observer.cpp
         glad/src/glad.c
         imgui/imgui.cpp
         imgui/imgui_draw.cpp

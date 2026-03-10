@@ -12,6 +12,7 @@
 #include <gtc/matrix_transform.hpp>
 #include <gtc/type_ptr.hpp>
 
+#include "Observer.h"
 #include "WaterSimulator.h"
 #define WindowWidth  1500
 #define WindowHeight 1000
@@ -41,11 +42,7 @@ GLuint cellEntriesSSBO;
 GLuint queryIdsSSBO;
 
 glm::mat4 proj;
-glm::mat4 view = glm::lookAt(
-    glm::vec3(0.0f, 0.0f, 5.0f),
-    glm::vec3(0.0f, 0.0f, 0.0f),
-    glm::vec3(0.0f, 1.0f, 0.0f)
-);
+glm::mat4 view;
 glm::vec4 particleColor;
 
 float mass             = 1.0;
@@ -59,6 +56,14 @@ float gravity = 0.0;
 float oldTime = 0.0;
 int tableSize = NUM_PARTICLES * 2;
 bool paused = true;
+
+Observer observer;
+Observer* gObserver = nullptr;
+
+bool firstMouse = true;
+float lastX = 400, lastY = 300;
+bool mouseCaptured = true;
+
 
 std::string loadShaderSource(const char* filepath) {
     std::ifstream file(filepath);
@@ -109,6 +114,10 @@ void init() {
     std::vector<int> cellEntries(NUM_PARTICLES , 0);
     std::vector<int> queryIds(NUM_PARTICLES , 0);
     std::vector<int> cellStart(tableSize + 1 , 0);
+
+    observer = Observer(glm::vec3(3.0f, 3.0f, 3.0f));
+    observer.LookAt(glm::vec3(0.0f));
+
 
     int ParticlesperRow = (int)cbrt(NUM_PARTICLES);
     int ParticlesperCol = ParticlesperRow;
@@ -283,7 +292,42 @@ extern "C" {
     __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
     __declspec(dllexport) unsigned long AmdPowerXpressRequestHighPerformance = 1;
 }
+void MouseCallback(GLFWwindow* window, double xpos, double ypos) {
+    if (!mouseCaptured) return;  // add this
 
+    if (firstMouse) {
+        lastX = (float)xpos;
+        lastY = (float)ypos;
+        firstMouse = false;
+    }
+    float xOffset = (float)xpos - lastX;
+    float yOffset = lastY - (float)ypos;
+    lastX = (float)xpos;
+    lastY = (float)ypos;
+    gObserver->Rotate(xOffset, yOffset);
+}
+
+void CheckUserInput() {
+    static bool tabWasPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS && !tabWasPressed) {
+        mouseCaptured = !mouseCaptured;
+        glfwSetInputMode(window, GLFW_CURSOR,
+            mouseCaptured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+        firstMouse = true;
+        tabWasPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_TAB) == GLFW_RELEASE) tabWasPressed = false;
+
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) observer.MoveForward(0.05f);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) observer.MoveForward(-0.05f);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) observer.MoveRight(-0.05f);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) observer.MoveRight(0.05f);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) observer.MoveUp(0.05f);
+    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) observer.MoveUp(-0.05f);
+    gObserver = &observer;
+    glfwSetCursorPosCallback(window, MouseCallback);
+}
 int main() {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -316,7 +360,7 @@ int main() {
 
 
     while (!glfwWindowShouldClose(window)) {
-
+        view = observer.GetViewMatrix();
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -356,8 +400,10 @@ int main() {
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
             glfwMakeContextCurrent(backup);
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
         glfwSwapBuffers(window);
+        CheckUserInput();
         glfwPollEvents();
     }
     ImGui_ImplOpenGL3_Shutdown();
