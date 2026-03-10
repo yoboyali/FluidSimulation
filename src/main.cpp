@@ -58,6 +58,7 @@ int tableSize = NUM_PARTICLES * 2;
 bool paused = true;
 
 Observer observer;
+
 Observer* gObserver = nullptr;
 
 bool firstMouse = true;
@@ -114,10 +115,6 @@ void init() {
     std::vector<int> cellEntries(NUM_PARTICLES , 0);
     std::vector<int> queryIds(NUM_PARTICLES , 0);
     std::vector<int> cellStart(tableSize + 1 , 0);
-
-    observer = Observer(glm::vec3(3.0f, 3.0f, 3.0f));
-    observer.LookAt(glm::vec3(0.0f));
-
 
     int ParticlesperRow = (int)cbrt(NUM_PARTICLES);
     int ParticlesperCol = ParticlesperRow;
@@ -336,19 +333,19 @@ int main() {
 
     window = glfwCreateWindow(WindowWidth + 240 , WindowHeight, "Simulation!", NULL, NULL);
     glfwMakeContextCurrent(window);
-
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, MouseCallback);
     gladLoadGL();
-    std::cout << "GPU: " << glGetString(GL_RENDERER) << std::endl;
     glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, WindowWidth, WindowHeight);
     glEnable(GL_SCISSOR_TEST);
     glScissor(0, 0, WindowWidth, WindowHeight);
+    observer = Observer(glm::vec3(3.0f, 3.0f, 3.0f));
+    observer.LookAt(glm::vec3(0.0f));
     init();
     std::vector<glm::vec4> debugPos(NUM_PARTICLES);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, posSSBO);
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, NUM_PARTICLES * sizeof(glm::vec4), debugPos.data());
-    std::cout << "First particle pos: " << debugPos[0].x << " " << debugPos[0].y << " " << debugPos[0].z << std::endl;
-    std::cout << "Last  particle pos: " << debugPos[NUM_PARTICLES-1].x << " " << debugPos[NUM_PARTICLES-1].y << " " << debugPos[NUM_PARTICLES-1].z << std::endl;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -400,7 +397,6 @@ int main() {
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
             glfwMakeContextCurrent(backup);
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
         glfwSwapBuffers(window);
         CheckUserInput();
