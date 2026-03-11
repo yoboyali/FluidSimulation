@@ -16,7 +16,8 @@
 #include "WaterSimulator.h"
 #define WindowWidth  1500
 #define WindowHeight 1000
-#define NUM_PARTICLES 40000
+#define NUM_PARTICLES 100000
+#define MAX_NEIGHBORS 128
 
 WaterSimulator simulator;
 GLFWwindow* window;
@@ -40,6 +41,9 @@ GLuint ColSSBO;
 GLuint cellStartSSBO;
 GLuint cellEntriesSSBO;
 GLuint queryIdsSSBO;
+GLuint neighborListSSBO;
+GLuint neighborCountSSBO;
+GLuint cellOffsetSSBO;
 
 glm::mat4 proj;
 glm::mat4 view;
@@ -57,7 +61,7 @@ float Particlespacing = 0.0f;
 float gravity = 10.0;
 float oldTime = 0.0;
 float xBorder = 1.4;
-float yBorder = 3.0;
+float yBorder = 2.0;
 float zBorder = 1.4;
 int tableSize = NUM_PARTICLES * 2;
 int simulationSteps = 1;
@@ -128,6 +132,7 @@ void init() {
     std::vector<int> queryIds(NUM_PARTICLES , 0);
     std::vector<int> cellStart(tableSize + 1 , 0);
 
+
     int ParticlesperRow = (int)cbrt(NUM_PARTICLES);
     int ParticlesperCol = ParticlesperRow;
     int ParticlesperDepth = (NUM_PARTICLES - 1) / (ParticlesperRow * ParticlesperCol) + 1;
@@ -179,6 +184,22 @@ void init() {
     glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(int), queryIds.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, queryIdsSSBO);
 
+    glGenBuffers(1, &neighborListSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, neighborListSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * MAX_NEIGHBORS * sizeof(int), nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, neighborListSSBO);
+
+    glGenBuffers(1, &neighborCountSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, neighborCountSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(int), nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, neighborCountSSBO);
+
+    std::vector<int> cellOffset(tableSize + 1, 0);
+    glGenBuffers(1, &cellOffsetSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellOffsetSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, (tableSize + 1) * sizeof(int), cellOffset.data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, cellOffsetSSBO);
+
 
     glGenVertexArrays(1, &VAO);
 
@@ -212,6 +233,47 @@ void recalculateConstants() {
 
 
 }
+void buildHashOnCPU() {
+    std::vector<int> cellStartCPU(tableSize + 1);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellStartSSBO);
+    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                       (tableSize + 1) * sizeof(int),
+                       cellStartCPU.data());
+
+    for (int i = 1; i <= tableSize; i++) {
+        cellStartCPU[i] += cellStartCPU[i - 1];
+    }
+
+    std::vector<int> cellOffsetCPU(cellStartCPU);
+
+    for (int i = tableSize; i > 0; i--) {
+        cellStartCPU[i] = cellStartCPU[i - 1];
+    }
+    cellStartCPU[0] = 0;
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellStartSSBO);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                    (tableSize + 1) * sizeof(int),
+                    cellStartCPU.data());
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellOffsetSSBO);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                    (tableSize + 1) * sizeof(int),
+                    cellOffsetCPU.data());
+
+
+
+    glUseProgram(compute_hashBuild);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2,  predSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5,  cellStartSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6,  cellEntriesSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, cellOffsetSSBO);
+    glUniform1ui(glGetUniformLocation(compute_hashBuild, "NUM_PARTICLES"), NUM_PARTICLES);
+    glUniform1f(glGetUniformLocation(compute_hashBuild,  "Spacing"),       smoothingRadius);
+    glUniform1ui(glGetUniformLocation(compute_hashBuild, "tableSize"),     tableSize);
+    glDispatchCompute(NUM_PARTICLES / 1024 + 1, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
 void display() {
 
     float time = glfwGetTime();
@@ -231,13 +293,13 @@ void display() {
         glUniform1f(glGetUniformLocation(compute_predict, "gravity"), gravity);
         glUniform3f(glGetUniformLocation(compute_predict, "down"), 0.0f, -1.0f , 0.0);
         glUniform1ui(glGetUniformLocation(compute_predict, "NUM_PARTICLES"), NUM_PARTICLES);
-        glDispatchCompute(NUM_PARTICLES / 256 + 1,  1, 1);
+        glDispatchCompute(NUM_PARTICLES / 1024 + 1,  1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         glUseProgram(compute_hashReset);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, cellStartSSBO);
         glUniform1ui(glGetUniformLocation(compute_hashReset, "tableSize"), tableSize);
-        glDispatchCompute((tableSize + 1) / 256 + 1, 1, 1);
+        glDispatchCompute((tableSize + 1) / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         glUseProgram(compute_hashCount);
@@ -248,24 +310,18 @@ void display() {
         glUniform1ui(glGetUniformLocation(compute_hashCount, "NUM_PARTICLES"), NUM_PARTICLES);
         glUniform1f(glGetUniformLocation(compute_hashCount, "Spacing"), smoothingRadius);
         glUniform1ui(glGetUniformLocation(compute_hashCount, "tableSize") , tableSize);
-        glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
+        glDispatchCompute(NUM_PARTICLES / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        glUseProgram(compute_hashBuild);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, cellStartSSBO);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, cellEntriesSSBO);
-        glUniform1ui(glGetUniformLocation(compute_hashBuild, "NUM_PARTICLES"), NUM_PARTICLES);
-        glUniform1f(glGetUniformLocation(compute_hashBuild, "Spacing"), smoothingRadius);
-        glUniform1ui(glGetUniformLocation(compute_hashBuild, "tableSize") , tableSize);
-        glDispatchCompute( 1, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        buildHashOnCPU();
 
         glUseProgram(compute_density);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, predSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, densSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, cellStartSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, cellEntriesSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, neighborListSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, neighborCountSSBO);
         glUniform1ui(glGetUniformLocation(compute_density, "NUM_PARTICLES"), NUM_PARTICLES);
         glUniform1f(glGetUniformLocation(compute_density, "dt"), dt);
         glUniform1f(glGetUniformLocation(compute_density, "mass"), mass);
@@ -274,7 +330,7 @@ void display() {
         glUniform1ui(glGetUniformLocation(compute_density, "tableSize") , tableSize);
         glUniform1f(glGetUniformLocation(compute_density , "K_SpikyPow2") , K_SpikyPow2);
         glUniform1f(glGetUniformLocation(compute_density , "K_SpikyPow3") , K_SpikyPow3);
-        glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
+        glDispatchCompute(NUM_PARTICLES / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         glUseProgram(compute_force);
@@ -283,6 +339,8 @@ void display() {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, densSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, cellStartSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, cellEntriesSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, neighborListSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, neighborCountSSBO);
         glUniform1ui(glGetUniformLocation(compute_force, "NUM_PARTICLES"), NUM_PARTICLES);
         glUniform1f(glGetUniformLocation(compute_force, "dt"), dt);
         glUniform1f(glGetUniformLocation(compute_force, "mass"), mass);
@@ -295,8 +353,10 @@ void display() {
         glUniform1f(glGetUniformLocation(compute_force, "K_SpikyPow2Grad") , K_SpikyPow2Grad);
         glUniform1f(glGetUniformLocation(compute_force, "K_SpikyPow3Grad") , K_SpikyPow3Grad);
         glUniform1f(glGetUniformLocation(compute_force, "nearPressureMultiplier") , nearPressureMultiplier);
-        glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
+
+        glDispatchCompute(NUM_PARTICLES / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
         glUseProgram(compute_apply);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
@@ -306,7 +366,7 @@ void display() {
         glUniform1f(glGetUniformLocation(compute_apply , "xBorder") , xBorder);
         glUniform1f(glGetUniformLocation(compute_apply , "yBorder") , yBorder);
         glUniform1f(glGetUniformLocation(compute_apply , "zBorder") , zBorder);
-        glDispatchCompute(NUM_PARTICLES / 256 + 1, 1, 1);
+        glDispatchCompute(NUM_PARTICLES / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
 
@@ -398,13 +458,12 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
-
     while (!glfwWindowShouldClose(window)) {
         view = observer.GetViewMatrix();
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-       // ImGui::SetNextWindowPos(ImVec2(WindowWidth , 100), ImGuiCond_Always);
+       //  ImGui::SetNextWindowPos(ImVec2(WindowWidth , 100), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(500, 600), ImGuiCond_Always);
         ImGui::Begin("Settings");
         ImGui::Text("Number of Particles: %d" , NUM_PARTICLES);

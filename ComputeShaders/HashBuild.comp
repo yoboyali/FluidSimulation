@@ -1,14 +1,17 @@
 #version 460 core
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 
+layout(std430, binding = 2) buffer PredictedPositionBuffer {
+    vec4 PredictedPositions[];
+};
 layout(std430, binding = 5) buffer CellStartBuffer {
     int cellStart[];
 };
 layout(std430, binding = 6) buffer CellEntriesBuffer {
     int cellEntries[];
 };
-layout(std430, binding = 2) buffer PredictedPositionBuffer {
-    vec4 PredictedPositions[];
+layout(std430, binding = 10) buffer CellOffsetBuffer {
+    int cellOffset[];
 };
 
 uniform uint NUM_PARTICLES;
@@ -20,28 +23,18 @@ uint hashCoords(uint x, uint y, uint z) {
     return hash % tableSize;
 }
 
-uint hashPosition(int index) {
-    vec3 coord = floor(PredictedPositions[index].xyz / Spacing);
-    ivec3 icoord = ivec3(coord);
-    return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000), uint(icoord.z + 100000));
-}
-
 void main() {
-    int total = 0;
-    for (int i = 0; i <= int(tableSize); i++) {
-        int count = cellStart[i];
-        cellStart[i] = total;
-        total += count;
-    }
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= NUM_PARTICLES) return;
 
-    for (int i = 0; i < int(NUM_PARTICLES); i++) {
-        int h = int(hashPosition(i));
-        cellEntries[cellStart[h]] = i;
-        cellStart[h]++;
-    }
+    vec3  coord  = floor(PredictedPositions[gid].xyz / Spacing);
+    ivec3 icoord = ivec3(coord);
+    uint h = hashCoords(uint(icoord.x + 100000),
+    uint(icoord.y + 100000),
+    uint(icoord.z + 100000));
 
-    for (int i = int(tableSize); i > 0; i--) {
-        cellStart[i] = cellStart[i - 1];
+    int slot = atomicAdd(cellOffset[h], -1) - 1;
+    if (slot >= 0 && slot < int(NUM_PARTICLES)) {
+        cellEntries[slot] = int(gid);
     }
-    cellStart[0] = 0;
 }

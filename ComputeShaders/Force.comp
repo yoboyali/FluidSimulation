@@ -1,5 +1,5 @@
 #version 460 core
-layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 
 #define M_PI 3.14159265358979323846
 
@@ -18,6 +18,12 @@ layout(std430, binding = 5) buffer CellStartBuffer {
 layout(std430, binding = 6) buffer CellEntriesBuffer {
     int cellEntries[];
 };
+layout(std430, binding = 8) buffer NeighborListBuffer {
+    int neighborList[];
+};
+layout(std430, binding = 9) buffer NeighborCountBuffer {
+    int neighborCount[];
+};
 
 uniform float dt;
 uniform uint NUM_PARTICLES;
@@ -31,6 +37,7 @@ uniform float Spacing;
 uniform uint tableSize;
 uniform float K_SpikyPow2Grad;
 uniform float K_SpikyPow3Grad;
+#define MAX_NEIGHBORS 128
 
 uint hashCoords(uint x, uint y, uint z) {
     uint hash = (x * 92837111u) + (y * 689287499u) + (z * 283923481u);
@@ -96,31 +103,16 @@ void calculatePressureForce(uint index, int neighborIndex, inout vec3 pressureFo
     pressureForce += dir * NearDensityDerivative(dst) * sharedNearPressure / Densities[neighborIndex].y;
 }
 
+
 void queryNeighbors(uint index, float maxDist) {
-    vec3 pos            = PredictedPositions[index].xyz;
     vec3 viscosityForce = vec3(0.0);
     vec3 pressureForce  = vec3(0.0);
-    vec3 center         = floor(pos / Spacing);
 
-    for (int xi = -1; xi <= 1; xi++) {
-        for (int yi = -1; yi <= 1; yi++) {
-            for (int zi = -1; zi <= 1; zi++) {
-                ivec3 cell = ivec3(center) + ivec3(xi, yi, zi);
-                uint h = hashCoords(uint(cell.x + 100000), uint(cell.y + 100000), uint(cell.z + 100000));
-
-                if (h >= tableSize) continue;
-                int start = cellStart[h];
-                int end   = cellStart[h + 1];
-                if (start < 0 || end < 0 || start > end || end > int(NUM_PARTICLES)) continue;
-
-                for (int i = start; i < end; i++) {
-                    int neighborIndex = cellEntries[i];
-                    if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;
-                    calculatePressureForce(index, neighborIndex, pressureForce);
-                    calculateViscosityForce(index, neighborIndex, viscosityForce);
-                }
-            }
-        }
+    int count = neighborCount[index];
+    for (int i = 0; i < count; i++) {
+        int neighborIndex = neighborList[index * MAX_NEIGHBORS + i];
+        calculatePressureForce(index, neighborIndex, pressureForce);
+        calculateViscosityForce(index, neighborIndex, viscosityForce);
     }
 
     vec3 pressureAcc = -pressureForce / Densities[index].x;

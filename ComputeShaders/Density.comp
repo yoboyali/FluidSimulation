@@ -1,5 +1,5 @@
 #version 460 core
-layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 
 #define M_PI 3.14159265358979323846
 
@@ -15,7 +15,13 @@ layout(std430, binding = 5) buffer CellStartBuffer {
 layout(std430, binding = 6) buffer CellEntriesBuffer {
     int cellEntries[];
 };
-
+layout(std430, binding = 8) buffer NeighborListBuffer {
+    int neighborList[];
+};
+layout(std430, binding = 9) buffer NeighborCountBuffer {
+    int neighborCount[];
+};
+shared vec4 sharedPos[1024];
 uniform float mass;
 uniform float smoothingRadius;
 uniform uint NUM_PARTICLES;
@@ -23,7 +29,7 @@ uniform float Spacing;
 uniform uint tableSize;
 uniform float K_SpikyPow2;
 uniform float K_SpikyPow3;
-
+#define MAX_NEIGHBORS 128
 
 uint hashCoords(uint x, uint y, uint z) {
     uint hash = (x * 92837111u) + (y * 689287499u) + (z * 283923481u);
@@ -52,6 +58,9 @@ void queryNeighbors(uint index, float maxDist) {
     vec2 density = vec2(0.0);
     vec3 pos    = PredictedPositions[index].xyz;
     vec3 center = floor(pos / Spacing);
+    int count = 0;
+    sharedPos[gl_LocalInvocationID.x] = PredictedPositions[index];
+    barrier();
 
     for (int xi = -1; xi <= 1; xi++) {
         for (int yi = -1; yi <= 1; yi++) {
@@ -67,15 +76,28 @@ void queryNeighbors(uint index, float maxDist) {
                 for (int i = start; i < end; i++) {
                     int neighborIndex = cellEntries[i];
                     if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;
-                    float dst = length(pos - PredictedPositions[neighborIndex].xyz);
+                    vec3 neighborPos;
+                    uint workgroupStart = gl_WorkGroupID.x * 1024;
+                    uint localIdx = uint(neighborIndex) - workgroupStart;
+                    if (localIdx < 1024) {
+                        neighborPos = sharedPos[localIdx].xyz;
+                    } else {
+                        neighborPos = PredictedPositions[neighborIndex].xyz;
+                    }
+                    float dst = length(pos - neighborPos);  // use the already-fetched neighborPos
                     if (dst >= smoothingRadius) continue;
                     density.x += mass * SpikyKernelPow2(dst);
                     density.y += mass * SpikyKernelPow3(dst);
+                    if (count < MAX_NEIGHBORS) {
+                        neighborList[index * MAX_NEIGHBORS + count] = neighborIndex;
+                        count++;
+                    }
                 }
             }
         }
     }
     Densities[index] = density;
+    neighborCount[index] = count;
 }
 
 void main() {
