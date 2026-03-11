@@ -7,7 +7,7 @@ layout(std430, binding = 2) buffer PredictedPositionBuffer {
     vec4 PredictedPositions[];
 };
 layout(std430, binding = 3) buffer DensityBuffer {
-    float Densities[];
+    vec2 Densities[];
 };
 layout(std430, binding = 5) buffer CellStartBuffer {
     int cellStart[];
@@ -21,6 +21,9 @@ uniform float smoothingRadius;
 uniform uint NUM_PARTICLES;
 uniform float Spacing;
 uniform uint tableSize;
+uniform float K_SpikyPow2;
+uniform float K_SpikyPow3;
+
 
 uint hashCoords(uint x, uint y, uint z) {
     uint hash = (x * 92837111u) + (y * 689287499u) + (z * 283923481u);
@@ -33,17 +36,20 @@ uint hashPosition(int index) {
     return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000), uint(icoord.z + 100000));
 }
 
-float smoothingKernel(float dst) {
-    if (dst < smoothingRadius) {
-        float scale = 15.0 / (2.0 * M_PI * pow(smoothingRadius, 5.0));
-        float v = smoothingRadius - dst;
-        return v * v * scale;
-    }
-    return 0.0;
+//for density
+float SpikyKernelPow2(float dst) {
+    float v = smoothingRadius - dst;
+    return v * v * K_SpikyPow2;
+}
+
+//for near density
+float SpikyKernelPow3(float dst) {
+    float v = smoothingRadius - dst;
+    return v * v * v * K_SpikyPow3;
 }
 
 void queryNeighbors(uint index, float maxDist) {
-    float density = 0.0;
+    vec2 density = vec2(0.0);
     vec3 pos    = PredictedPositions[index].xyz;
     vec3 center = floor(pos / Spacing);
 
@@ -62,7 +68,9 @@ void queryNeighbors(uint index, float maxDist) {
                     int neighborIndex = cellEntries[i];
                     if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;
                     float dst = length(pos - PredictedPositions[neighborIndex].xyz);
-                    density += mass * smoothingKernel(dst);
+                    if (dst >= smoothingRadius) continue;
+                    density.x += mass * SpikyKernelPow2(dst);
+                    density.y += mass * SpikyKernelPow3(dst);
                 }
             }
         }

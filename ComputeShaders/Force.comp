@@ -10,7 +10,7 @@ layout(std430, binding = 2) buffer PredictedPositionBuffer {
     vec4 PredictedPositions[];
 };
 layout(std430, binding = 3) buffer DensityBuffer {
-    float Densities[];
+    vec2 Densities[];
 };
 layout(std430, binding = 5) buffer CellStartBuffer {
     int cellStart[];
@@ -25,9 +25,12 @@ uniform float mass;
 uniform float smoothingRadius;
 uniform float targetDensity;
 uniform float pressureMultiplier;
+uniform float nearPressureMultiplier;
 uniform float viscosityStrength;
 uniform float Spacing;
 uniform uint tableSize;
+uniform float K_SpikyPow2Grad;
+uniform float K_SpikyPow3Grad;
 
 uint hashCoords(uint x, uint y, uint z) {
     uint hash = (x * 92837111u) + (y * 689287499u) + (z * 283923481u);
@@ -40,28 +43,39 @@ uint hashPosition(int index) {
     return hashCoords(uint(icoord.x + 100000), uint(icoord.y + 100000), uint(icoord.z + 100000));
 }
 
-float smoothingKernelDerivative(float dst) {
+float DensityDerivative(float dst) {
     if (dst >= smoothingRadius) return 0.0;
-    float scale = 45.0 / (M_PI * pow(smoothingRadius, 6.0));
-    return -scale * (smoothingRadius - dst) * (smoothingRadius - dst);
+    float v = smoothingRadius - dst;
+    return -v * K_SpikyPow2Grad;
+}
+
+float NearDensityDerivative(float dst) {
+    if (dst >= smoothingRadius) return 0.0;
+    float v = smoothingRadius - dst;
+    return -v * v * K_SpikyPow3Grad;
 }
 
 float convertDensityToPressure(float density) {
     return (density - targetDensity) * pressureMultiplier;
 }
 
+float convertNearDensityToPressure(float nearDensity) {
+    return nearDensity * nearPressureMultiplier;
+}
+
 float viscositySmoothingKernel(float dst) {
     if (dst >= smoothingRadius) return 0.0;
-    float scale = 15.0 / (2.0 * M_PI * pow(smoothingRadius, 3.0));
-    float x = dst / smoothingRadius;
-    return scale * (-0.5 * x * x * x + x * x + 0.5 * x - 1.0);
+    float volume = M_PI * pow(smoothingRadius, 8.0) / 4.0;
+    float v = smoothingRadius * smoothingRadius - dst * dst;
+    return v * v * v / volume;
 }
 
 void calculateViscosityForce(uint index, int neighborIndex, inout vec3 viscosityForce) {
     if (uint(neighborIndex) == index) return;
     float dst = length(PredictedPositions[index].xyz - PredictedPositions[neighborIndex].xyz);
+    if (dst < 0.0001) return;
     float influence = viscositySmoothingKernel(dst);
-    viscosityForce += (velocities[neighborIndex].xyz - velocities[index].xyz) * influence * (mass / Densities[neighborIndex]);
+    viscosityForce += (velocities[neighborIndex].xyz - velocities[index].xyz) * influence * (mass / Densities[neighborIndex].x);
 }
 
 void calculatePressureForce(uint index, int neighborIndex, inout vec3 pressureForce) {
@@ -70,12 +84,16 @@ void calculatePressureForce(uint index, int neighborIndex, inout vec3 pressureFo
     float dst    = length(offset);
     if (dst < 0.0001) return;
     vec3  dir           = offset / dst;
-    float slope         = smoothingKernelDerivative(dst);
-    float pressure_i    = convertDensityToPressure(Densities[index]);
-    float pressure_j    = convertDensityToPressure(Densities[neighborIndex]);
-    float pressure_term = (pressure_i / (Densities[index]        * Densities[index]) +
-    pressure_j / (Densities[neighborIndex] * Densities[neighborIndex]));
-    pressureForce -= dir * mass * mass * pressure_term * slope;
+    float pressure_i     = convertDensityToPressure(Densities[index].x);
+    float pressure_j     = convertDensityToPressure(Densities[neighborIndex].x);
+    float nearPressure_i = convertNearDensityToPressure(Densities[index].y);
+    float nearPressure_j = convertNearDensityToPressure(Densities[neighborIndex].y);
+
+    float sharedPressure     = (pressure_i     + pressure_j)     / 2.0;
+    float sharedNearPressure = (nearPressure_i + nearPressure_j) / 2.0;
+
+    pressureForce += dir * DensityDerivative(dst)     * sharedPressure     / Densities[neighborIndex].x;
+    pressureForce += dir * NearDensityDerivative(dst) * sharedNearPressure / Densities[neighborIndex].y;
 }
 
 void queryNeighbors(uint index, float maxDist) {
@@ -105,7 +123,7 @@ void queryNeighbors(uint index, float maxDist) {
         }
     }
 
-    vec3 pressureAcc = pressureForce / Densities[index];
+    vec3 pressureAcc = -pressureForce / Densities[index].x;
     viscosityForce   = viscosityForce * viscosityStrength;
     velocities[index].xyz += (pressureAcc + viscosityForce / mass) * dt;
 }
