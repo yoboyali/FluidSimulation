@@ -13,11 +13,11 @@ class Fluid {
     float mass                   = 1.0f;
     float gravity                = 10.0f;
     float oldTime                = 0.0f;
-    float xBorder                = 1.4f;
+    float xBorder                = 3.4f;
     float yBorder                = 2.0f;
-    float zBorder                = 1.4f;
+    float zBorder                = 1.0f;
     float particleRadius         = 0.015f;
-    float particleSpacing        = 0.0f;
+    float particleSpacing        = 0.015f;
     float K_SpikyPow2            = 0.0f;
     float K_SpikyPow3            = 0.0f;
     float K_SpikyPow2Grad        = 0.0f;
@@ -26,13 +26,14 @@ class Fluid {
     float targetDensity          = 500.0f;
     float pressureMultiplier     = 31.0f;
     float viscosityStrength      = 0.15f;
-    float nearPressureMultiplier = 47.3f;
+    float nearPressureMultiplier = 31.3f;
 
     int tableSize;
     int numParticles;
     int simulationSteps = 1;
 
     bool paused = true;
+    bool showDensity = false;
 
     glm::mat4 proj;
     glm::vec4 particleColor;

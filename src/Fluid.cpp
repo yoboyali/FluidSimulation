@@ -17,11 +17,12 @@ void Fluid::Init() {
     int ParticlesperCol    = ParticlesperRow;
     int ParticlesperDepth  = (numParticles - 1) / (ParticlesperRow * ParticlesperCol) + 1;
     float spacing          = particleRadius * 2 + particleSpacing;
+    float spawnOffsetX = xBorder - (ParticlesperRow * spacing * 0.5f);
+    float spawnOffsetY = -yBorder + (ParticlesperCol * spacing * 0.5f);
 
     for (int i = 0; i < numParticles; i++) {
-        //if (i > NUM_PARTICLES / 2){spawnOffsetX =  -xBorder * 0.5f;}
-        float x = ((i % ParticlesperRow) - ParticlesperRow / 2.0f + 0.5f) * spacing;
-        float y = ((i / ParticlesperRow) % ParticlesperCol - ParticlesperCol / 2.0f + 0.5f) * spacing;
+        float x = ((i % ParticlesperRow) - ParticlesperRow / 2.0f + 0.5f) * spacing + spawnOffsetX;
+        float y = ((i / ParticlesperRow) % ParticlesperCol - ParticlesperCol / 2.0f + 0.5f) * spacing + spawnOffsetY;
         float z = ((i / (ParticlesperRow * ParticlesperCol)) - ParticlesperDepth / 2.0f + 0.5f) * spacing;
         positions[i] = glm::vec4(x, y, z , 0.0);
     }
@@ -102,11 +103,10 @@ void Fluid::Render(glm::mat4 view) {
 
 
     float time   = glfwGetTime();
-    float fullDt = paused ? 0.0f : time - oldTime;
-    float dt     = fullDt / simulationSteps;
+    float dt = paused ? 0.0f :  1.0f / 144.0f;
+    //float dt     = fullDt / simulationSteps;
 
-    dt = std::min(dt, 0.005f);
-
+    //dt = std::min(dt, 0.005f);
     CreateImGuiWindow();
 
     for (int i = 0; i < simulationSteps ; i++) {
@@ -192,7 +192,8 @@ void Fluid::Render(glm::mat4 view) {
         glUniform1f(glGetUniformLocation(compute_apply , "xBorder") , xBorder);
         glUniform1f(glGetUniformLocation(compute_apply , "yBorder") , yBorder);
         glUniform1f(glGetUniformLocation(compute_apply , "zBorder") , zBorder);
-        glUniform1f(glGetUniformLocation(compute_apply, "targetDensity"), targetDensity);
+        glUniform1f(glGetUniformLocation(compute_apply , "targetDensity") , targetDensity);
+        glUniform1i(glGetUniformLocation(compute_apply , "showDensity") , showDensity);
         glDispatchCompute(numParticles / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
@@ -268,14 +269,15 @@ void Fluid::CreateImGuiWindow() {
     ImGui::SliderFloat("The Y Border", &yBorder , 0.2f, 10.0f);
     ImGui::SliderFloat("The Z Border", &zBorder , 0.2f, 10.0f);
     ImGui::SliderInt("Simulation Steps ", &simulationSteps , 1, 5.);
+
+    const char* programState = paused ? "PAUSED" : "RUNNING";
+    const char* colorState = showDensity ? "Showing Density" : "Showing Speed";
+    if (ImGui::Button(programState)) {paused = !paused;}
+    ImGui::SameLine();
+    if (ImGui::Button(colorState)) {showDensity = !showDensity;}
+    ImGuiIO& io = ImGui::GetIO();
     if (ImGui::Button("Reset Simulation")) {ResetScene();}
     ImGui::SameLine();
-
-    const char* Text = paused ? "PAUSED" : "RUNNING";
-    if (ImGui::Button(Text)) {
-        paused = !paused;
-    }
-    ImGuiIO& io = ImGui::GetIO();
     if (ImGui::Button("Close Simulation")) {glfwSetWindowShouldClose(Window, true);}
     ImGui::Text("FPS: %.1f", io.Framerate);
     ImGui::Text("Frame time: %.3f ms", 1000.0f / io.Framerate);
@@ -283,12 +285,7 @@ void Fluid::CreateImGuiWindow() {
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        GLFWwindow* backup = glfwGetCurrentContext();
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-        glfwMakeContextCurrent(backup);
-    }
+
 }
 
 void Fluid::RecalculateConstants() {
@@ -364,7 +361,6 @@ Fluid::Fluid(int NumParticles, GLFWwindow* window) {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(Window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
