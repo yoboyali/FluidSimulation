@@ -1,7 +1,7 @@
 #ifndef FLUIDSIMULATION_INCLUDES_H
 #define FLUIDSIMULATION_INCLUDES_H
 
-// CRITICAL: glad.h MUST come first, before GLFW and any OpenGL headers
+// OpenGl
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -21,7 +21,7 @@
 #include <sstream>
 #include <vector>
 
-// Your headers
+// headers
 #include "Observer.h"
 
 // Constants
