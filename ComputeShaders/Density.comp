@@ -76,6 +76,7 @@ void queryNeighbors(uint index, float maxDist) {
                 for (int i = start; i < end; i++) {
                     int neighborIndex = cellEntries[i];
                     if (neighborIndex < 0 || uint(neighborIndex) >= NUM_PARTICLES) continue;
+                    //if (neighborIndex == int(index)) continue;
                     vec3 neighborPos;
                     uint workgroupStart = gl_WorkGroupID.x * 1024;
                     uint localIdx = uint(neighborIndex) - workgroupStart;
@@ -84,7 +85,7 @@ void queryNeighbors(uint index, float maxDist) {
                     } else {
                         neighborPos = PredictedPositions[neighborIndex].xyz;
                     }
-                    float dst = length(pos - neighborPos);  // use the already-fetched neighborPos
+                    float dst = length(pos - neighborPos);
                     if (dst >= smoothingRadius) continue;
                     density.x += mass * SpikyKernelPow2(dst);
                     density.y += mass * SpikyKernelPow3(dst);

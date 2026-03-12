@@ -7,15 +7,20 @@ layout(std430, binding = 1) buffer VelocityBuffer {
 layout(std430, binding = 0) buffer PositionBuffer {
     vec4 positions[];
 };
+layout(std430, binding = 3) buffer DensityBuffer {
+    vec2 Densities[];
+};
 layout(std430, binding = 4) buffer ColorBuffer {
     vec4 Colors[];
 };
 
 uniform float dt;
 uniform uint NUM_PARTICLES;
-uniform float yBorder = 0.9;
-uniform float xBorder = 1.4;
-uniform float zBorder = 0.9;
+uniform float targetDensity;
+uniform float yBorder;
+uniform float xBorder;
+uniform float zBorder;
+uniform bool showDensity;
 struct ColorStop {
     float position;
     vec3 color;
@@ -48,7 +53,10 @@ void checkCollisions(uint index) {
 
 vec3 evaluateGradient(uint index) {
     float speed = length(velocities[index].xyz);
-    float t = speed / 5.5;
+    float t;
+
+    if(showDensity == true){t = length(Densities[index].x) / targetDensity;}
+    else{t = speed / 5.5;}
     t = clamp(t, 0.0f, 1.0f);;
 
     for (int i = 0; i < gradientSize - 1; i++)
