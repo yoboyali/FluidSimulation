@@ -23,12 +23,6 @@ endif()
 
 add_executable(FluidSimulation
         src/main.cpp
-        src/WaterSimulator.cpp
-        src/WaterSimulator.h
-        src/SpatialHash.cpp
-        src/SpatialHash.h
-        src/vector.cpp
-        src/vector.h
         src/Observer.h
         src/Observer.cpp
         glad/src/glad.c
@@ -38,6 +32,9 @@ add_executable(FluidSimulation
         imgui/imgui_widgets.cpp
         imgui/imgui_impl_glfw.cpp
         imgui/imgui_impl_opengl3.cpp
+        src/Fluid.cpp
+        src/Fluid.h
+        src/includes.h
 )
 
 target_include_directories(FluidSimulation PRIVATE
