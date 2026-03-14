@@ -1,0 +1,23 @@
+#version 460 core
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout(std430, binding = 2) buffer PredictedPositionBuffer {
+    vec4 PredictedPositions[];
+};layout(std430, binding = 11) buffer particleKeyBuffer {
+    uint particleKeys[];
+};
+uniform float smoothingRadius;
+uniform uint tableSize;
+uniform uint numParticles;
+uint hashCoords(uint x, uint y, uint z) {
+    uint hash = (x * 92837111u) + (y * 689287499u) + (z * 283923481u);
+    return hash % tableSize;
+}
+void main(){
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= numParticles){return;}
+
+    vec3 pos = PredictedPositions[index].xyz;
+    ivec3 cell = ivec3(floor(pos / smoothingRadius));
+    particleKeys[index] = hashCoords(uint(cell.x + 100000),
+    uint(cell.y + 100000),
+    uint(cell.z + 100000));}

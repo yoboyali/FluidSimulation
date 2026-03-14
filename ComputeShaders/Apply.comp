@@ -56,7 +56,7 @@ vec3 evaluateGradient(uint index) {
     float t;
 
     if(showDensity == true){t = length(Densities[index].x) / targetDensity;}
-    else{t = speed / 5.5;}
+    else{t = speed / 4.0;}
     t = clamp(t, 0.0f, 1.0f);;
 
     for (int i = 0; i < gradientSize - 1; i++)

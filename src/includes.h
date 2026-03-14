@@ -26,7 +26,7 @@
 
 // Constants
 #define WindowWidth  1500
-#define WindowHeight 1000
+#define WindowHeight 1080
 #define MAX_NEIGHBORS 64
 
 #endif //FLUIDSIMULATION_INCLUDES_H
