@@ -1,5 +1,5 @@
 #version 460 core
-layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 layout(std430, binding = 1) buffer VelocityBuffer {
     vec4 velocities[];
@@ -43,12 +43,12 @@ void checkCollisions(uint index) {
     vec3 pos = positions[index].xyz;
     float border = 0.01;
 
-    if (pos.y <= -yBorder+ border) { positions[index].y = -yBorder + border; velocities[index].y *= -damping; }
-    if (pos.y >=  yBorder+ border) { positions[index].y =  yBorder + border ; velocities[index].y *= -damping; }
-    if (pos.x <= -xBorder+ border) { positions[index].x = -xBorder + border ; velocities[index].x *= -damping; }
-    if (pos.x >=  xBorder+ border) { positions[index].x =  xBorder + border ; velocities[index].x *= -damping; }
-    if (pos.z <= -zBorder+ border) { positions[index].z = -zBorder + border ; velocities[index].z *= -damping; }
-    if (pos.z >=  zBorder+ border) { positions[index].z =  zBorder + border ; velocities[index].z *= -damping; }
+    if (pos.y <= -yBorder + border) { positions[index].y = -yBorder + border; velocities[index].y *= -damping; }
+    if (pos.y >=  yBorder - border) { positions[index].y =  yBorder - border; velocities[index].y *= -damping; }
+    if (pos.x <= -xBorder + border) { positions[index].x = -xBorder + border; velocities[index].x *= -damping; }
+    if (pos.x >=  xBorder - border) { positions[index].x =  xBorder - border; velocities[index].x *= -damping; }
+    if (pos.z <= -zBorder + border) { positions[index].z = -zBorder + border; velocities[index].z *= -damping; }
+    if (pos.z >=  zBorder - border) { positions[index].z =  zBorder - border; velocities[index].z *= -damping; }
 }
 
 vec3 evaluateGradient(uint index) {

@@ -90,7 +90,6 @@ void queryNeighbors(uint index, float maxDist) {
                     density.x += mass * SpikyKernelPow2(dst);
                     density.y += mass * SpikyKernelPow3(dst);
                     if (count < MAX_NEIGHBORS) {
-                        neighborList[index * MAX_NEIGHBORS + count] = neighborIndex;
                         count++;
                     }
                 }
@@ -98,7 +97,6 @@ void queryNeighbors(uint index, float maxDist) {
         }
     }
     Densities[index] = density;
-    neighborCount[index] = count;
 }
 
 void main() {
