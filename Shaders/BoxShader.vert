@@ -5,7 +5,7 @@ uniform float yBorder;
 uniform float zBorder;
 uniform mat4 proj;
 uniform mat4 view;
-
+flat out vec3 color;
 void main(){
 
     vec3 positions[8] = vec3[](
@@ -24,5 +24,6 @@ void main(){
     0, 4,  1, 5,  2, 6,  3, 7
     );
 
+    color = vec3(0.0 , 0.0 , 0.0);
     gl_Position = proj * view * vec4(positions[edges[gl_VertexID]] , 1.0);
 }
