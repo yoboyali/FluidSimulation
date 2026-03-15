@@ -1,13 +1,12 @@
 #version 460 core
 
+out float FragDepth;
 in vec2 texCoord;
 in vec3 eyeSpacePos;
-flat in vec4 color;
 
 uniform float radius;
 uniform mat4 proj;
-
-out vec4 FragColor;
+uniform bool showDepth;
 
 void main()
 {
@@ -24,8 +23,6 @@ void main()
 
     float linearDepth = (clipPos.w - 0.01) / (100.0 - 0.01);
     float expDepth = 1.0 - exp(-linearDepth * 10.0);
-    float ambient = 0.5;
 
-    vec3 Color = vec3(expDepth) + ambient;
-    FragColor = vec4(Color, 1.0);
+    FragDepth = pixelPos.z;
 }

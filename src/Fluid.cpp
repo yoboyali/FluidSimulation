@@ -115,13 +115,31 @@ void Fluid::Init() {
     glBufferData(GL_SHADER_STORAGE_BUFFER, numParticles * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 17, sortedPredSSBO);
 
+    glGenFramebuffers(1, &depthFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
+
+    glGenTextures(1, &depthTex);
+    glBindTexture(GL_TEXTURE_2D, depthTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, WindowWidth, WindowHeight, 0, GL_RED, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, depthTex, 0);
+
+    glGenRenderbuffers(1, &depthRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, WindowWidth, WindowHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     glGenVertexArrays(1, &VAO);
 
-    shaderProgram       = CreateShaderProgram("Shaders/VertexShader.vert", "Shaders/FragmentShader.frag");
-    renderShaderProgram = CreateShaderProgram("Shaders/ScreenSpace.vert", "Shaders/ScreenSpace.frag");
-    backGroundShader    = CreateShaderProgram("Shaders/BackGround.vert" , "Shaders/BackGround.frag");
-    boxShader           = CreateShaderProgram("Shaders/BoxShader.vert" , "Shaders/BoxShader.frag");
-    floorShader         = CreateShaderProgram("Shaders/Floor.vert" , "Shaders/Floor.frag");
+    shaderProgram       = CreateShaderProgram("Shaders/VertexShader.vert","Shaders/FragmentShader.frag");
+    depthPass           = CreateShaderProgram("Shaders/ScreenSpace.vert","Shaders/DepthPass.frag");
+    normalPass          = CreateShaderProgram("Shaders/vert.vert","Shaders/NormalPass.frag");
+    backGroundShader    = CreateShaderProgram("Shaders/BackGround.vert","Shaders/BackGround.frag");
+    boxShader           = CreateShaderProgram("Shaders/BoxShader.vert","Shaders/BoxShader.frag");
+    floorShader         = CreateShaderProgram("Shaders/Floor.vert","Shaders/Floor.frag");
     compute_predict     = CreateComputeProgram("ComputeShaders/Predicted.comp");
     compute_density     = CreateComputeProgram("ComputeShaders/Density.comp");
     compute_force       = CreateComputeProgram("ComputeShaders/Force.comp");
@@ -131,8 +149,8 @@ void Fluid::Init() {
     compute_hashReset   = CreateComputeProgram("ComputeShaders/HashReset.comp");
     compute_keyGen      = CreateComputeProgram("ComputeShaders/KeyGen.comp");
     compute_radixSort   = CreateComputeProgram("ComputeShaders/RadixSort.comp");
-    compute_reorder     = CreateComputeProgram("ComputeShaders/Reorder.comp");
-    compute_writeback   = CreateComputeProgram("ComputeShaders/Writeback.comp");
+    //compute_reorder     = CreateComputeProgram("ComputeShaders/Reorder.comp");
+    //compute_writeback   = CreateComputeProgram("ComputeShaders/Writeback.comp");
     proj = glm::perspective(glm::radians(60.0f),(float)WindowWidth / (float)WindowHeight, 0.01f, 100.0f);
 
 }
@@ -295,14 +313,29 @@ void Fluid::Render(glm::mat4 view) {
     }
     else {
         //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glUseProgram(renderShaderProgram);
+        glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glUseProgram(depthPass);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
-        glUniformMatrix4fv(glGetUniformLocation(renderShaderProgram, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
-        glUniformMatrix4fv(glGetUniformLocation(renderShaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniform1f(glGetUniformLocation(renderShaderProgram, "radius"), particleRadius + 0.01);
+        glUniformMatrix4fv(glGetUniformLocation(depthPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+        glUniformMatrix4fv(glGetUniformLocation(depthPass, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniform1f(glGetUniformLocation(depthPass, "radius"), particleRadius + 0.01);
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+        glUseProgram(normalPass);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, depthTex);
+        glUniform1i(glGetUniformLocation(normalPass, "depthTex"), 0);
+        glUniformMatrix4fv(glGetUniformLocation(normalPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+        glUniform1f(glGetUniformLocation(normalPass, "maxDepth"), maxDepth);
+        glUniform1f(glGetUniformLocation(normalPass, "texelSize"), 1.0f / (float)WindowWidth);
+
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
 
 
     }
@@ -407,12 +440,12 @@ void Fluid::CreateImGuiWindow() {
         if (ImGui::BeginTabItem("Render settings")) {
 
             ImGui::ColorEdit4("Color", my_color);
+            ImGui::SliderFloat("Max Depth", &maxDepth , -0.5f, 1.0f);
             if (ImGui::Button(colorState) && !render) {showDensity = !showDensity;}
             ImGui::SameLine();
             if (ImGui::Button(renderState)) {render = !render;}
             ImGui::SameLine();
             if (ImGui::Button(backGroundState)) {showBackGround = !showBackGround;}
-
             ImGui::PlotLines("FPS History", fpsHistory, FPS_HISTORY, fpsOffset, nullptr, 0.0f, 200.0f, ImVec2(0,80));
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("FPS: %.1f", io.Framerate);

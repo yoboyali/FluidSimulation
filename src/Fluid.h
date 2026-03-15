@@ -10,7 +10,9 @@ class Fluid {
     GLuint shaderProgram ,compute_predict ,compute_density ,compute_force ,compute_apply ,compute_hashCount ,compute_hashBuild ,compute_hashReset;
     GLuint VAO ,posSSBO ,predSSBO ,velSSBO ,densSSBO ,ColSSBO ,cellStartSSBO ,cellEntriesSSBO ,queryIdsSSBO ,neighborListSSBO ,neighborCountSSBO ,cellOffsetSSBO;
     GLuint keysSSBO , compute_keyGen , compute_radixSort , particleKeyOutSSBO ,cellEntriesOutSSBO ,sortedPosSSBO, sortedVelSSBO, sortedPredSSBO , compute_reorder , compute_writeback;
-    GLuint renderShaderProgram , backGroundShader , boxShader , floorShader;
+    GLuint depthPass , backGroundShader , boxShader , floorShader , depthTex , depthFBO , depthRBO , normalPass ;
+;
+
 
     float mass                   = 1.0f;
     float gravity                = 10.0f;
@@ -30,6 +32,7 @@ class Fluid {
     float pressureMultiplier     = 31.0f;
     float viscosityStrength      = 0.15f;
     float nearPressureMultiplier = 45.3f;
+    float maxDepth               = 0.0;
 
     int tableSize;
     int numParticles;
