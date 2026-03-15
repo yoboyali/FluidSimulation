@@ -1,4 +1,3 @@
-// FloorVert.vert
 #version 460 core
 
 uniform float xBorder;

@@ -24,8 +24,8 @@ void Fluid::Init() {
     for (int i = 0; i < numParticles; i++) {
        // if (i < numParticles / 2){spawnOffsetZ = -spawnOffsetZ;}
         float x = ((i % ParticlesperRow) - ParticlesperRow / 2.0f + 0.5f) * spacing + spawnOffsetX;
-        float y = ((i / ParticlesperRow) % ParticlesperCol - ParticlesperCol / 2.0f + 0.5f) * spacing + spawnOffsetY;
-        float z = ((i / (ParticlesperRow * ParticlesperCol)) - ParticlesperDepth / 2.0f + 0.5f) * spacing + spawnOffsetZ;
+        float y = ((i / ParticlesperRow) % ParticlesperCol - ParticlesperCol / 2.0f + 0.5f) * spacing;
+        float z = ((i / (ParticlesperRow * ParticlesperCol)) - ParticlesperDepth / 2.0f + 0.5f) * spacing;
         positions[i] = glm::vec4(x, y, z , 0.0);
     }
 
@@ -118,12 +118,47 @@ void Fluid::Init() {
     glGenFramebuffers(1, &depthFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
 
+    glGenFramebuffers(1, &blurFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, blurFBO);
+
+    glGenFramebuffers(1, &blurFBO2);
+    glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
+
+    // depthFBO + depthTex
+    glGenFramebuffers(1, &depthFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
     glGenTextures(1, &depthTex);
     glBindTexture(GL_TEXTURE_2D, depthTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, WindowWidth, WindowHeight, 0, GL_RED, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, depthTex, 0);
+    glGenRenderbuffers(1, &depthRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, WindowWidth, WindowHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+
+    // blurFBO + blurTex
+    glGenFramebuffers(1, &blurFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, blurFBO);
+    glGenTextures(1, &blurTex);
+    glBindTexture(GL_TEXTURE_2D, blurTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, WindowWidth, WindowHeight, 0, GL_RED, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, blurTex, 0);
+
+    // blurFBO2 + blurTex2
+    glGenFramebuffers(1, &blurFBO2);
+    glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
+    glGenTextures(1, &blurTex2);
+    glBindTexture(GL_TEXTURE_2D, blurTex2);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, WindowWidth, WindowHeight, 0, GL_RED, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, blurTex2, 0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     glGenRenderbuffers(1, &depthRBO);
     glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
@@ -135,11 +170,12 @@ void Fluid::Init() {
     glGenVertexArrays(1, &VAO);
 
     shaderProgram       = CreateShaderProgram("Shaders/VertexShader.vert","Shaders/FragmentShader.frag");
-    depthPass           = CreateShaderProgram("Shaders/ScreenSpace.vert","Shaders/DepthPass.frag");
-    normalPass          = CreateShaderProgram("Shaders/vert.vert","Shaders/NormalPass.frag");
-    backGroundShader    = CreateShaderProgram("Shaders/BackGround.vert","Shaders/BackGround.frag");
-    boxShader           = CreateShaderProgram("Shaders/BoxShader.vert","Shaders/BoxShader.frag");
-    floorShader         = CreateShaderProgram("Shaders/Floor.vert","Shaders/Floor.frag");
+    depthPass           = CreateShaderProgram("Shaders/ScreenSpace/DepthPass.vert","Shaders/ScreenSpace/DepthPass.frag");
+    smoothingPass       = CreateShaderProgram("Shaders/ScreenSpace/vert.vert" , "Shaders/ScreenSpace/SmoothingPass.frag");
+    normalPass          = CreateShaderProgram("Shaders/ScreenSpace/vert.vert","Shaders/ScreenSpace/NormalPass.frag");
+    backGroundShader    = CreateShaderProgram("Shaders/BackGround/BackGround.vert","Shaders/BackGround/BackGround.frag");
+    boxShader           = CreateShaderProgram("Shaders/BackGround/BoxShader.vert","Shaders/BackGround/BoxShader.frag");
+    floorShader         = CreateShaderProgram("Shaders/BackGround/Floor.vert","Shaders/BackGround/Floor.frag");
     compute_predict     = CreateComputeProgram("ComputeShaders/Predicted.comp");
     compute_density     = CreateComputeProgram("ComputeShaders/Density.comp");
     compute_force       = CreateComputeProgram("ComputeShaders/Force.comp");
@@ -320,20 +356,36 @@ void Fluid::Render(glm::mat4 view) {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
         glUniformMatrix4fv(glGetUniformLocation(depthPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
         glUniformMatrix4fv(glGetUniformLocation(depthPass, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniform1f(glGetUniformLocation(depthPass, "radius"), particleRadius + 0.01);
+        glUniform1f(glGetUniformLocation(depthPass, "radius"), particleRadius + 0.03);
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-
-        glUseProgram(normalPass);
+        glBindFramebuffer(GL_FRAMEBUFFER, blurFBO);
+        glUseProgram(smoothingPass);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, depthTex);
-        glUniform1i(glGetUniformLocation(normalPass, "depthTex"), 0);
+        glUniform1i(glGetUniformLocation(smoothingPass, "Tex"), 0);
+        glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 1.0f / WindowWidth, 0.0f);
+        glUniform1f(glGetUniformLocation(smoothingPass, "blurScale"), blurScale);
+        glUniform1f(glGetUniformLocation(smoothingPass, "filterRadius"), filderRadius);
+        glUniform1f(glGetUniformLocation(smoothingPass, "blurDepthFalloff"), blurDepthFalloff);
+
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
+        glBindTexture(GL_TEXTURE_2D, blurTex);
+        glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 0.0f, 1.0f / WindowHeight);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glUseProgram(normalPass);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, blurTex2);
+        glUniform1i(glGetUniformLocation(normalPass, "Tex"), 0);
         glUniformMatrix4fv(glGetUniformLocation(normalPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
         glUniform1f(glGetUniformLocation(normalPass, "maxDepth"), maxDepth);
         glUniform1f(glGetUniformLocation(normalPass, "texelSize"), 1.0f / (float)WindowWidth);
-
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, 3);
 
@@ -441,6 +493,8 @@ void Fluid::CreateImGuiWindow() {
 
             ImGui::ColorEdit4("Color", my_color);
             ImGui::SliderFloat("Max Depth", &maxDepth , -0.5f, 1.0f);
+            ImGui::SliderFloat("Blur Depth Falloff", &blurDepthFalloff , -10.2f, 10.0f);
+            ImGui::SliderFloat("Blur scale", &blurScale , -0.3f, 0.5f);
             if (ImGui::Button(colorState) && !render) {showDensity = !showDensity;}
             ImGui::SameLine();
             if (ImGui::Button(renderState)) {render = !render;}
@@ -569,6 +623,13 @@ Fluid::~Fluid() {
     glDeleteBuffers(1, &particleKeyOutSSBO);
     glDeleteBuffers(1, &cellEntriesOutSSBO);
     glDeleteVertexArrays(1, &VAO);
+    glDeleteFramebuffers(1, &depthFBO);
+    glDeleteFramebuffers(1, &blurFBO);
+    glDeleteFramebuffers(1, &blurFBO2);
+    glDeleteTextures(1, &depthTex);
+    glDeleteTextures(1, &blurTex);
+    glDeleteTextures(1, &blurTex2);
+    glDeleteRenderbuffers(1, &depthRBO);
 
     glDeleteProgram(shaderProgram);
     glDeleteProgram(compute_predict);
