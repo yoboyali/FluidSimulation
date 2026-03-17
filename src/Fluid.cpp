@@ -24,7 +24,7 @@ void Fluid::Init() {
     for (int i = 0; i < numParticles; i++) {
        // if (i < numParticles / 2){spawnOffsetZ = -spawnOffsetZ;}
         float x = ((i % ParticlesperRow) - ParticlesperRow / 2.0f + 0.5f) * spacing + spawnOffsetX;
-        float y = ((i / ParticlesperRow) % ParticlesperCol - ParticlesperCol / 2.0f + 0.5f) * spacing;
+        float y = ((i / ParticlesperRow) % ParticlesperCol - ParticlesperCol / 2.0f + 0.5f) * spacing + spawnOffsetY;
         float z = ((i / (ParticlesperRow * ParticlesperCol)) - ParticlesperDepth / 2.0f + 0.5f) * spacing;
         positions[i] = glm::vec4(x, y, z , 0.0);
     }
@@ -124,7 +124,6 @@ void Fluid::Init() {
     glGenFramebuffers(1, &blurFBO2);
     glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
 
-    // depthFBO + depthTex
     glGenFramebuffers(1, &depthFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
     glGenTextures(1, &depthTex);
@@ -138,7 +137,6 @@ void Fluid::Init() {
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, WindowWidth, WindowHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
 
-    // blurFBO + blurTex
     glGenFramebuffers(1, &blurFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, blurFBO);
     glGenTextures(1, &blurTex);
@@ -148,7 +146,6 @@ void Fluid::Init() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, blurTex, 0);
 
-    // blurFBO2 + blurTex2
     glGenFramebuffers(1, &blurFBO2);
     glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
     glGenTextures(1, &blurTex2);
@@ -208,13 +205,13 @@ void Fluid::Render(glm::mat4 view) {
         glUniform1f(glGetUniformLocation(compute_predict, "gravity"), gravity);
         glUniform3f(glGetUniformLocation(compute_predict, "down"), 0.0, -1.0,0.0);
         glUniform1ui(glGetUniformLocation(compute_predict, "NUM_PARTICLES"), numParticles);
-        glDispatchCompute(numParticles / 256 + 1, 1, 1);
+        glDispatchCompute(numParticles / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         glUseProgram(compute_hashReset);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, cellStartSSBO);
         glUniform1ui(glGetUniformLocation(compute_hashReset, "tableSize"), tableSize);
-        glDispatchCompute((tableSize + 1) / 256 + 1, 1, 1);
+        glDispatchCompute((tableSize + 1) / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         glUseProgram(compute_hashCount);
@@ -225,7 +222,7 @@ void Fluid::Render(glm::mat4 view) {
         glUniform1ui(glGetUniformLocation(compute_hashCount, "NUM_PARTICLES"), numParticles);
         glUniform1f(glGetUniformLocation(compute_hashCount, "Spacing"), smoothingRadius);
         glUniform1ui(glGetUniformLocation(compute_hashCount, "tableSize"), tableSize);
-        glDispatchCompute(numParticles / 256 + 1, 1, 1);
+        glDispatchCompute(numParticles / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         BuildHash();
@@ -236,7 +233,7 @@ void Fluid::Render(glm::mat4 view) {
         glUniform1ui(glGetUniformLocation(compute_keyGen, "numParticles"), numParticles);
         glUniform1f(glGetUniformLocation(compute_keyGen, "smoothingRadius"), smoothingRadius);
         glUniform1ui(glGetUniformLocation(compute_keyGen, "tableSize"), tableSize);
-        glDispatchCompute(numParticles / 256 + 1, 1, 1);
+        glDispatchCompute(numParticles / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         glUseProgram(compute_radixSort);
@@ -258,7 +255,7 @@ void Fluid::Render(glm::mat4 view) {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 16, sortedVelSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 17, sortedPredSSBO);
         glUniform1ui(glGetUniformLocation(compute_reorder, "NUM_PARTICLES"), numParticles);
-        glDispatchCompute(numParticles / 256 + 1, 1, 1);
+        glDispatchCompute(numParticles / WorkGroupSize + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);*/
 
         glUseProgram(compute_density);
@@ -275,7 +272,7 @@ void Fluid::Render(glm::mat4 view) {
         glUniform1ui(glGetUniformLocation(compute_density, "tableSize"), tableSize);
         glUniform1f(glGetUniformLocation(compute_density, "K_SpikyPow2"), K_SpikyPow2);
         glUniform1f(glGetUniformLocation(compute_density, "K_SpikyPow3"), K_SpikyPow3);
-        glDispatchCompute(numParticles / 256 + 1, 1, 1);
+        glDispatchCompute(numParticles / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         glUseProgram(compute_force);
@@ -297,7 +294,7 @@ void Fluid::Render(glm::mat4 view) {
         glUniform1f(glGetUniformLocation(compute_force, "K_SpikyPow3Grad"), K_SpikyPow3Grad);
         glUniform1f(glGetUniformLocation(compute_force, "nearPressureMultiplier"), nearPressureMultiplier);
         glUniform1f(glGetUniformLocation(compute_force, "K_Viscosity"), K_Viscosity);
-        glDispatchCompute(numParticles / 256 + 1, 1, 1);
+        glDispatchCompute(numParticles / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 
@@ -313,7 +310,7 @@ void Fluid::Render(glm::mat4 view) {
         glUniform1f(glGetUniformLocation(compute_apply, "zBorder"), zBorder);
         glUniform1f(glGetUniformLocation(compute_apply, "targetDensity"), targetDensity);
         glUniform1i(glGetUniformLocation(compute_apply, "showDensity"), showDensity);
-        glDispatchCompute(numParticles / 256 + 1, 1, 1);
+        glDispatchCompute(numParticles / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -341,7 +338,7 @@ void Fluid::Render(glm::mat4 view) {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniform1f(glGetUniformLocation(shaderProgram, "radius"), particleRadius + 0.01);
+        glUniform1f(glGetUniformLocation(shaderProgram, "radius"), particleRadius);
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
 
@@ -361,22 +358,26 @@ void Fluid::Render(glm::mat4 view) {
         glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, blurFBO);
-        glUseProgram(smoothingPass);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, depthTex);
-        glUniform1i(glGetUniformLocation(smoothingPass, "Tex"), 0);
-        glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 1.0f / WindowWidth, 0.0f);
-        glUniform1f(glGetUniformLocation(smoothingPass, "blurScale"), blurScale);
-        glUniform1f(glGetUniformLocation(smoothingPass, "filterRadius"), filderRadius);
-        glUniform1f(glGetUniformLocation(smoothingPass, "blurDepthFalloff"), blurDepthFalloff);
 
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        for (int i = 0; i < blurIterations ; i++) {
+            glBindFramebuffer(GL_FRAMEBUFFER, blurFBO);
+            glUseProgram(smoothingPass);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, i == 0 ? depthTex : blurTex2);
+            //glBindTexture(GL_TEXTURE_2D, depthTex);
+            glUniform1i(glGetUniformLocation(smoothingPass, "Tex"), 0);
+            glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 1.0f / WindowWidth, 0.0f);
+            glUniform1f(glGetUniformLocation(smoothingPass, "blurScale"), blurScale);
+            glUniform1f(glGetUniformLocation(smoothingPass, "filterRadius"), filderRadius);
+            glUniform1f(glGetUniformLocation(smoothingPass, "blurDepthFalloff"), blurDepthFalloff);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
-        glBindTexture(GL_TEXTURE_2D, blurTex);
-        glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 0.0f, 1.0f / WindowHeight);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
+            glBindTexture(GL_TEXTURE_2D, blurTex);
+            glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 0.0f, 1.0f / WindowHeight);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+        }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glUseProgram(normalPass);
@@ -432,12 +433,50 @@ void Fluid::BuildHash() {
     glUniform1ui(glGetUniformLocation(compute_hashBuild, "NUM_PARTICLES"), numParticles);
     glUniform1f(glGetUniformLocation(compute_hashBuild,  "Spacing"),       smoothingRadius);
     glUniform1ui(glGetUniformLocation(compute_hashBuild, "tableSize"),     tableSize);
-    glDispatchCompute(numParticles / 256 + 1, 1, 1);
+    glDispatchCompute(numParticles / 1024 + 1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 }
 
-void Fluid::ResetScene() {Init();}
+void Fluid::ResetScene() {
+
+    glDeleteBuffers(1, &posSSBO);
+    glDeleteBuffers(1, &velSSBO);
+    glDeleteBuffers(1, &predSSBO);
+    glDeleteBuffers(1, &densSSBO);
+    glDeleteBuffers(1, &ColSSBO);
+    glDeleteBuffers(1, &cellStartSSBO);
+    glDeleteBuffers(1, &cellEntriesSSBO);
+    glDeleteBuffers(1, &queryIdsSSBO);
+    glDeleteBuffers(1, &neighborListSSBO);
+    glDeleteBuffers(1, &neighborCountSSBO);
+    glDeleteBuffers(1, &cellOffsetSSBO);
+    glDeleteBuffers(1, &keysSSBO);
+    glDeleteBuffers(1, &particleKeyOutSSBO);
+    glDeleteBuffers(1, &cellEntriesOutSSBO);
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteFramebuffers(1, &depthFBO);
+    glDeleteFramebuffers(1, &blurFBO);
+    glDeleteFramebuffers(1, &blurFBO2);
+    glDeleteTextures(1, &depthTex);
+    glDeleteTextures(1, &blurTex);
+    glDeleteTextures(1, &blurTex2);
+    glDeleteRenderbuffers(1, &depthRBO);
+
+    glDeleteProgram(shaderProgram);
+    glDeleteProgram(compute_predict);
+    glDeleteProgram(compute_density);
+    glDeleteProgram(compute_force);
+    glDeleteProgram(compute_apply);
+    glDeleteProgram(compute_hashCount);
+    glDeleteProgram(compute_hashBuild);
+    glDeleteProgram(compute_hashReset);
+    glDeleteProgram(compute_keyGen);
+    glDeleteProgram(compute_radixSort);
+
+
+    Init();
+}
 
 void Fluid::CreateImGuiWindow() {
 
@@ -460,8 +499,8 @@ void Fluid::CreateImGuiWindow() {
         fpsHistory[fpsOffset] = io.Framerate;
         fpsOffset = (fpsOffset + 1) % FPS_HISTORY;
         if (ImGui::BeginTabItem("Sim settings")) {
-            ImGui::Text("Number of Particles: %d", numParticles);
             ImGui::PushItemWidth(200);
+            ImGui::Text("Number of Particles: %d", numParticles);
             ImGui::SliderFloat("Gravity", &gravity, -10.0f, 10.0f);
             ImGui::SliderFloat("Mass", &mass, 0.0f, 5.0f);
             // ImGui::SliderFloat("Smoothing Radius", &smoothingRadius, 0.0f, 1.0f);
@@ -490,11 +529,12 @@ void Fluid::CreateImGuiWindow() {
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Render settings")) {
-
+            ImGui::PushItemWidth(200);
             ImGui::ColorEdit4("Color", my_color);
-            ImGui::SliderFloat("Max Depth", &maxDepth , -0.5f, 1.0f);
+            ImGui::SliderInt("Blur iterations" , &blurIterations , 1 , 10);
             ImGui::SliderFloat("Blur Depth Falloff", &blurDepthFalloff , -10.2f, 10.0f);
-            ImGui::SliderFloat("Blur scale", &blurScale , -0.3f, 0.5f);
+            ImGui::SliderFloat("Blur Radius",    &filderRadius,     1.0f, 100.0f);
+            ImGui::SliderFloat("Blur scale", &blurScale , -10.3f, 50.5f);
             if (ImGui::Button(colorState) && !render) {showDensity = !showDensity;}
             ImGui::SameLine();
             if (ImGui::Button(renderState)) {render = !render;}

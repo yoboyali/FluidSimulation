@@ -35,12 +35,13 @@ class Fluid {
     float nearPressureMultiplier = 45.3f;
     float maxDepth               = 0.0f;
     float blurScale              = -0.027f;
-    float filderRadius           = 20.0f;
-    float blurDepthFalloff       = 5.0f;
+    float filderRadius           = 60.0f;
+    float blurDepthFalloff       = 1.5f;
 
     int tableSize;
     int numParticles;
     int simulationSteps = 1;
+    int blurIterations = 1;
 
     bool paused = true;
     bool showDensity = false;
