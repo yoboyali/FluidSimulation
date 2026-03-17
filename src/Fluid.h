@@ -11,14 +11,14 @@ class Fluid {
     GLuint VAO ,posSSBO ,predSSBO ,velSSBO ,densSSBO ,ColSSBO ,cellStartSSBO ,cellEntriesSSBO ,queryIdsSSBO ,neighborListSSBO ,neighborCountSSBO ,cellOffsetSSBO;
     GLuint keysSSBO , compute_keyGen , compute_radixSort , particleKeyOutSSBO ,cellEntriesOutSSBO ,sortedPosSSBO, sortedVelSSBO, sortedPredSSBO , compute_reorder , compute_writeback;
     GLuint depthPass , backGroundShader , boxShader , floorShader , depthTex , depthFBO , depthRBO , normalPass , smoothingPass, blurFBO , blurFBO2;
-    GLuint blurTex , blurTex2 ,blurRBO ,blurRBO2;
+    GLuint blurTex , blurTex2 ,blurRBO ,blurRBO2 , ThicknessPass , thicknessFBO , thicknessTex , finalPass , backgroundFBO , backgroundTex , backgroundRBO;
 
 
 
     float mass                   = 1.0f;
     float gravity                = 10.0f;
     float oldTime                = 0.0f;
-    float xBorder                = 4.4f;
+    float xBorder                = 3.4f;
     float yBorder                = 2.0f;
     float zBorder                = 1.5f;
     float particleRadius         = 0.015f;
@@ -37,7 +37,8 @@ class Fluid {
     float blurScale              = -0.027f;
     float filderRadius           = 60.0f;
     float blurDepthFalloff       = 1.5f;
-
+    float thicknessScale         = 0.025f;
+    float refractionStrenght     = 0.2;
     int tableSize;
     int numParticles;
     int simulationSteps = 1;
