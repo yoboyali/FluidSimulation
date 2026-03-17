@@ -14,6 +14,7 @@ uniform float xBorder;
 uniform float yBorder;
 uniform float zBorder;
 
+uniform vec3 fluidColor;
 vec3 boundsSize = vec3(xBorder, yBorder, zBorder);
 vec3 lightDir   = normalize(vec3(0.5, 1.0, 0.8));
 
@@ -112,7 +113,7 @@ LightResponse CalculateReflectionAndRefraction(vec3 inDir, vec3 normal, float io
 
 vec3 sampleEnvironment(vec3 dir) {
     float t = dir.y * 0.5 + 0.5;
-    return mix(vec3(0.1, 0.1, 0.2), vec3(0.5, 0.7, 1.0), t);
+    return mix(vec3(0.1 , 0.6 , 0.9), vec3(1.0 , 1.0 , 1.0), t);
 }
 
 vec3 sampleBackground(vec2 uv) {
@@ -122,17 +123,33 @@ vec3 sampleBackground(vec2 uv) {
 void main() {
     float depth = texture(Tex, texCoord).r;
     if (depth >= maxDepth) {
-        discard;
-    }
+        FragColor = texture(backgroundTex, texCoord);
+        return; }
 
     vec3 hitPos  = uvToEye(texCoord, depth);
     vec3 viewDir = normalize(-hitPos);
     vec3 normal  = calculateNormals(depth);
     normal       = SmoothEdgeNormals(normal, hitPos, boundsSize);
 
-    LightResponse lightResponse = CalculateReflectionAndRefraction(viewDir , normal , iorAir , iorFluid);
-    vec3 reflectCol = vec3(lightResponse.reflectDir);
+    LightResponse lr = CalculateReflectionAndRefraction(-viewDir, normal, iorAir, iorFluid);
 
-    FragColor = vec4(reflectCol , 1.0);
+    vec3 reflectCol = sampleEnvironment(lr.reflectDir);
+
+    float specular  = pow(max(0.0, dot(lr.reflectDir, lightDir)), 64.0);
+    //reflectCol     += vec3(specular);
+
+    vec2 refractUV  = texCoord + lr.refractDir.xy * 0.05;
+    vec3 refractCol = sampleBackground(refractUV);
+   // vec2 refractOffset = normal.xy * refractionStrength * texelSize; // implo that bish
+
+    float thickness     = texture(thicknessTex, texCoord).r;
+   // float transmit    = exp(-thickness * absorptionCoeff);
+    vec3 color  = mix(vec3(fluidColor), vec3(fluidColor * 0.3), 1.0);
+
+    refractCol        = mix(color, refractCol, 1.0);
+
+    vec3 finalColor = mix(refractCol, reflectCol, lr.reflectWeight);
+
+    FragColor = vec4(finalColor, 1.0);
 
 }

@@ -10,7 +10,7 @@ class Fluid {
     GLuint shaderProgram ,compute_predict ,compute_density ,compute_force ,compute_apply ,compute_hashCount ,compute_hashBuild ,compute_hashReset;
     GLuint VAO ,posSSBO ,predSSBO ,velSSBO ,densSSBO ,ColSSBO ,cellStartSSBO ,cellEntriesSSBO ,queryIdsSSBO ,neighborListSSBO ,neighborCountSSBO ,cellOffsetSSBO;
     GLuint keysSSBO , compute_keyGen , compute_radixSort , particleKeyOutSSBO ,cellEntriesOutSSBO ,sortedPosSSBO, sortedVelSSBO, sortedPredSSBO , compute_reorder , compute_writeback;
-    GLuint depthPass , backGroundShader , boxShader , floorShader , depthTex , depthFBO , depthRBO , normalPass , smoothingPass, blurFBO , blurFBO2;
+    GLuint depthPass , backGroundShader , boxShader , floorShader , depthTex , depthFBO , depthRBO , smoothingPass, blurFBO , blurFBO2;
     GLuint blurTex , blurTex2 ,blurRBO ,blurRBO2 , ThicknessPass , thicknessFBO , thicknessTex , finalPass , backgroundFBO , backgroundTex , backgroundRBO;
 
 
@@ -35,10 +35,13 @@ class Fluid {
     float nearPressureMultiplier = 45.3f;
     float maxDepth               = 0.0f;
     float blurScale              = -0.027f;
-    float filderRadius           = 60.0f;
+    float filderRadius           = 20.0f;
     float blurDepthFalloff       = 1.5f;
     float thicknessScale         = 0.025f;
     float refractionStrenght     = 0.2;
+
+    float fluidColor[3] = {0.0f, 0.3f, 0.8f};
+
     int tableSize;
     int numParticles;
     int simulationSteps = 1;
@@ -47,7 +50,6 @@ class Fluid {
     bool paused = true;
     bool showDensity = false;
     bool render = true;
-    bool showBackGround = true;
 
     glm::mat4 proj;
     glm::vec4 particleColor;

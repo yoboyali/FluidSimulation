@@ -159,14 +159,26 @@ void Fluid::Init() {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, thicknessTex, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    glGenFramebuffers(1, &backgroundFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, backgroundFBO);
+    glGenTextures(1, &backgroundTex);
+    glBindTexture(GL_TEXTURE_2D, backgroundTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, WindowWidth, WindowHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, backgroundTex, 0);
+    glGenRenderbuffers(1, &backgroundRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, backgroundRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, WindowWidth, WindowHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, backgroundRBO);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 
     glGenVertexArrays(1, &VAO);
 
     shaderProgram       = CreateShaderProgram("Shaders/VertexShader.vert","Shaders/FragmentShader.frag");
     depthPass           = CreateShaderProgram("Shaders/ScreenSpace/DepthPass.vert","Shaders/ScreenSpace/DepthPass.frag");
     smoothingPass       = CreateShaderProgram("Shaders/ScreenSpace/vert.vert" , "Shaders/ScreenSpace/SmoothingPass.frag");
-    normalPass          = CreateShaderProgram("Shaders/ScreenSpace/vert.vert","Shaders/ScreenSpace/NormalPass.frag");
     ThicknessPass       = CreateShaderProgram("Shaders/ScreenSpace/DepthPass.vert" , "Shaders/ScreenSpace/ThicknessPass.frag");
     finalPass           = CreateShaderProgram("Shaders/ScreenSpace/vert.vert" , "Shaders/ScreenSpace/FinalPass.frag");
     backGroundShader    = CreateShaderProgram("Shaders/BackGround/BackGround.vert","Shaders/BackGround/BackGround.frag");
@@ -189,7 +201,8 @@ void Fluid::Init() {
 void Fluid::Render(glm::mat4 view) {
     float time   = glfwGetTime();
     float fullDt = paused ? 0.0f : time - oldTime;
-    float dt     = paused ? 0.0f : 1.0f / 200.0f;
+    float dt     = fullDt / simulationSteps;
+    dt = std::min(dt, 0.005f);
 
     RecalculateConstants();
     CreateImGuiWindow();
@@ -312,9 +325,10 @@ void Fluid::Render(glm::mat4 view) {
         glDispatchCompute(numParticles / 1024 + 1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
-        glBindFramebuffer(GL_FRAMEBUFFER, backgroundFBO);
+
+        render ? glBindFramebuffer(GL_FRAMEBUFFER, backgroundFBO) : glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    if (showBackGround) {
         glDisable(GL_DEPTH_TEST);
         glUseProgram(backGroundShader);
         glUniform2f(glGetUniformLocation(backGroundShader, "resolution"), WindowWidth, WindowHeight);
@@ -324,108 +338,107 @@ void Fluid::Render(glm::mat4 view) {
         glUseProgram(floorShader);
         glUniformMatrix4fv(glGetUniformLocation(floorShader, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
         glUniformMatrix4fv(glGetUniformLocation(floorShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniform1f(glGetUniformLocation(floorShader , "xBorder") , xBorder);
-        glUniform1f(glGetUniformLocation(floorShader , "yBorder") , yBorder);
-        glUniform1f(glGetUniformLocation(floorShader, "zBorder") , zBorder);
-        glUniform1f(glGetUniformLocation(floorShader, "floorScale") , 10.0);
+        glUniform1f(glGetUniformLocation(floorShader, "xBorder"), xBorder);
+        glUniform1f(glGetUniformLocation(floorShader, "yBorder"), yBorder);
+        glUniform1f(glGetUniformLocation(floorShader, "zBorder"), zBorder);
+        glUniform1f(glGetUniformLocation(floorShader, "floorScale"), 10.0);
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES , 0 , 6);
-    }
-    if (!render) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glUseProgram(shaderProgram);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniform1f(glGetUniformLocation(shaderProgram, "radius"), particleRadius);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
 
-
-    }
-    else {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glUseProgram(depthPass);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
-        glUniformMatrix4fv(glGetUniformLocation(depthPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
-        glUniformMatrix4fv(glGetUniformLocation(depthPass, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniform1f(glGetUniformLocation(depthPass, "radius"), particleRadius + 0.03f);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
-
-    for (int i = 0; i < blurIterations; i++) {
-        glBindFramebuffer(GL_FRAMEBUFFER, blurFBO);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glUseProgram(smoothingPass);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, i == 0 ? depthTex : blurTex2);
-        glUniform1i(glGetUniformLocation(smoothingPass, "Tex"), 0);
-        glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 1.0f / WindowWidth, 0.0f);
-        glUniform1f(glGetUniformLocation(smoothingPass, "blurScale"), blurScale);
-        glUniform1f(glGetUniformLocation(smoothingPass, "filterRadius"), filderRadius);
-        glUniform1f(glGetUniformLocation(smoothingPass, "blurDepthFalloff"), blurDepthFalloff);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glBindTexture(GL_TEXTURE_2D, blurTex);
-        glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 0.0f, 1.0f / WindowHeight);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-    }
-
-        glBindFramebuffer(GL_FRAMEBUFFER, thicknessFBO);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_ONE, GL_ONE);
-        glDisable(GL_DEPTH_TEST);
-        glUseProgram(ThicknessPass);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
-        glUniformMatrix4fv(glGetUniformLocation(ThicknessPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
-        glUniformMatrix4fv(glGetUniformLocation(ThicknessPass, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniform1f(glGetUniformLocation(ThicknessPass, "radius"), particleRadius * 5.0);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
-        glDisable(GL_BLEND);
-        glEnable(GL_DEPTH_TEST);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glUseProgram(finalPass);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, blurTex2);
-        glUniform1i(glGetUniformLocation(finalPass, "Tex"), 0);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, thicknessTex);
-        glUniform1i(glGetUniformLocation(finalPass, "thicknessTex"), 1);
-        glUniformMatrix4fv(glGetUniformLocation(finalPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
-        glUniform1f(glGetUniformLocation(finalPass, "texelSize"), 1.0f / WindowWidth);
-        glUniform1f(glGetUniformLocation(finalPass, "normalScale"), 10.0f);
-        glUniform1f(glGetUniformLocation(finalPass, "maxDepth"), maxDepth);
-        glUniform1f(glGetUniformLocation(finalPass, "absorptionCoeff"), thicknessScale);
-        glUniform1f(glGetUniformLocation(finalPass, "xBorder"), xBorder);
-        glUniform1f(glGetUniformLocation(finalPass, "yBorder"), yBorder);
-        glUniform1f(glGetUniformLocation(finalPass, "zBorder"), zBorder);
-        glUniform1f(glGetUniformLocation(finalPass, "refractionStrength"), refractionStrenght);
-        glBindVertexArray(VAO);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-        glDisable(GL_BLEND);
-
-
-    }
         glUseProgram(boxShader);
         glUniformMatrix4fv(glGetUniformLocation(boxShader, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
         glUniformMatrix4fv(glGetUniformLocation(boxShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniform1f(glGetUniformLocation(boxShader , "xBorder") , xBorder);
-        glUniform1f(glGetUniformLocation(boxShader , "yBorder") , yBorder);
-        glUniform1f(glGetUniformLocation(boxShader , "zBorder") , zBorder);
+        glUniform1f(glGetUniformLocation(boxShader, "xBorder"), xBorder);
+        glUniform1f(glGetUniformLocation(boxShader, "yBorder"), yBorder);
+        glUniform1f(glGetUniformLocation(boxShader, "zBorder"), zBorder);
         glBindVertexArray(VAO);
-        glDrawArrays(GL_LINES , 0 , 24);
+        glDrawArrays(GL_LINES, 0, 24);
+
+
+        if (!render) {
+            glUseProgram(shaderProgram);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
+            glBindTexture(GL_TEXTURE_2D, backgroundTex);
+            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+            glUniform1f(glGetUniformLocation(shaderProgram, "radius"), particleRadius);
+            glBindVertexArray(VAO);
+            glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
+        }
+        else{
+            glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glUseProgram(depthPass);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ColSSBO);
+            glUniformMatrix4fv(glGetUniformLocation(depthPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+            glUniformMatrix4fv(glGetUniformLocation(depthPass, "view"), 1, GL_FALSE, glm::value_ptr(view));
+            glUniform1f(glGetUniformLocation(depthPass, "radius"), particleRadius + 0.03f);
+            glBindVertexArray(VAO);
+            glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
+
+            for (int i = 0; i < blurIterations; i++) {
+                glBindFramebuffer(GL_FRAMEBUFFER, blurFBO);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glUseProgram(smoothingPass);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, i == 0 ? depthTex : blurTex2);
+                glUniform1i(glGetUniformLocation(smoothingPass, "Tex"), 0);
+                glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 1.0f / WindowWidth, 0.0f);
+                glUniform1f(glGetUniformLocation(smoothingPass, "blurScale"), blurScale);
+                glUniform1f(glGetUniformLocation(smoothingPass, "filterRadius"), filderRadius);
+                glUniform1f(glGetUniformLocation(smoothingPass, "blurDepthFalloff"), blurDepthFalloff);
+                glBindVertexArray(VAO);
+                glDrawArrays(GL_TRIANGLES, 0, 3);
+
+                glBindFramebuffer(GL_FRAMEBUFFER, blurFBO2);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glBindTexture(GL_TEXTURE_2D, blurTex);
+                glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 0.0f, 1.0f / WindowHeight);
+                glDrawArrays(GL_TRIANGLES, 0, 3);
+            }
+
+            glBindFramebuffer(GL_FRAMEBUFFER, thicknessFBO);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_ONE, GL_ONE);
+            glDisable(GL_DEPTH_TEST);
+            glUseProgram(ThicknessPass);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSBO);
+            glUniformMatrix4fv(glGetUniformLocation(ThicknessPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+            glUniformMatrix4fv(glGetUniformLocation(ThicknessPass, "view"), 1, GL_FALSE, glm::value_ptr(view));
+            glUniform1f(glGetUniformLocation(ThicknessPass, "radius"), particleRadius * 5.0f);
+            glBindVertexArray(VAO);
+            glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
+            glDisable(GL_BLEND);
+            glEnable(GL_DEPTH_TEST);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glUseProgram(finalPass);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, blurTex2);
+            glUniform1i(glGetUniformLocation(finalPass, "Tex"), 0);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, thicknessTex);
+            glUniform1i(glGetUniformLocation(finalPass, "thicknessTex"), 1);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, backgroundTex);
+            glUniform1i(glGetUniformLocation(finalPass, "backgroundTex"), 2);
+            glUniformMatrix4fv(glGetUniformLocation(finalPass, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+            glUniform1f(glGetUniformLocation(finalPass, "texelSize"), 1.0f / WindowWidth);
+            glUniform1f(glGetUniformLocation(finalPass, "normalScale"), 10.0f);
+            glUniform1f(glGetUniformLocation(finalPass, "maxDepth"), maxDepth);
+            glUniform1f(glGetUniformLocation(finalPass, "absorptionCoeff"), thicknessScale);
+            glUniform1f(glGetUniformLocation(finalPass, "refractionStrength"), refractionStrenght);
+            glUniform3f(glGetUniformLocation(finalPass, "fluidColor"), fluidColor[0], fluidColor[1], fluidColor[2]);
+            glBindVertexArray(VAO);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 
         oldTime = time;
 }
@@ -516,11 +529,9 @@ void Fluid::CreateImGuiWindow() {
     ImGui::Begin("Settings");
     ImGui::SetNextWindowSize(ImVec2(500, 600), ImGuiCond_Always);
     if (ImGui::BeginTabBar("MyTabBar")) {
-        float my_color[4];
         const char* programState = paused ? "Run" : "Pause";
         const char* colorState = showDensity ? "Show speed" : "Show density";
         const char* renderState = render ? "Disable Render" : "Render";
-        const char* backGroundState = showBackGround ? "BackGround Enabled" : "BackGround Disabled";
         ImGuiIO& io = ImGui::GetIO();
         fpsHistory[fpsOffset] = io.Framerate;
         fpsOffset = (fpsOffset + 1) % FPS_HISTORY;
@@ -556,18 +567,16 @@ void Fluid::CreateImGuiWindow() {
         }
         if (ImGui::BeginTabItem("Render settings")) {
             ImGui::PushItemWidth(200);
-            ImGui::ColorEdit4("Color", my_color);
+            ImGui::ColorEdit3("Color", fluidColor);
             ImGui::SliderInt("Blur iterations" , &blurIterations , 0 , 10);
             ImGui::SliderFloat("Blur Depth Falloff", &blurDepthFalloff , -10.2f, 10.0f);
             ImGui::SliderFloat("Blur Radius",    &filderRadius,     1.0f, 100.0f);
             ImGui::SliderFloat("Blur scale", &blurScale , -10.3f, 50.5f);
-            ImGui::SliderFloat("Thickness scale", &thicknessScale , -0.3f, 5.5f);
+            ImGui::SliderFloat("Thickness scale", &thicknessScale , 0.0f, 0.4f);
             ImGui::SliderFloat("refraction strenght", &refractionStrenght , -0.3f, 50.5f);
             if (ImGui::Button(colorState) && !render) {showDensity = !showDensity;}
             ImGui::SameLine();
             if (ImGui::Button(renderState)) {render = !render;}
-            ImGui::SameLine();
-            if (ImGui::Button(backGroundState)) {showBackGround = !showBackGround;}
             ImGui::PlotLines("FPS History", fpsHistory, FPS_HISTORY, fpsOffset, nullptr, 0.0f, 200.0f, ImVec2(0,80));
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("FPS: %.1f", io.Framerate);
