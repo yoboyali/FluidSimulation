@@ -32,15 +32,17 @@ class Fluid {
     float targetDensity          = 500.0f;
     float pressureMultiplier     = 31.0f;
     float viscosityStrength      = 0.15f;
-    float nearPressureMultiplier = 45.3f;
+    float nearPressureMultiplier = 28.3f;
     float maxDepth               = 0.0f;
     float blurScale              = -0.027f;
-    float filderRadius           = 20.0f;
+    float filterRadius           = 20.0f;
     float blurDepthFalloff       = 1.5f;
-    float thicknessScale         = 0.025f;
-    float refractionStrenght     = 0.2;
+    float absorptionCoeff        = 0.025f;
+    float absorptionScale        = 0.1f;
+    float refractionStrength     = 33.05;
+    float specularStrength       = 163.0;
 
-    float fluidColor[3] = {0.0f, 0.3f, 0.8f};
+    float fluidColor[3] = {114.0f, 0.34f, 0.14f};
 
     int tableSize;
     int numParticles;

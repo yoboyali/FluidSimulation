@@ -387,7 +387,7 @@ void Fluid::Render(glm::mat4 view) {
                 glUniform1i(glGetUniformLocation(smoothingPass, "Tex"), 0);
                 glUniform2f(glGetUniformLocation(smoothingPass, "blurDir"), 1.0f / WindowWidth, 0.0f);
                 glUniform1f(glGetUniformLocation(smoothingPass, "blurScale"), blurScale);
-                glUniform1f(glGetUniformLocation(smoothingPass, "filterRadius"), filderRadius);
+                glUniform1f(glGetUniformLocation(smoothingPass, "filterRadius"), filterRadius);
                 glUniform1f(glGetUniformLocation(smoothingPass, "blurDepthFalloff"), blurDepthFalloff);
                 glBindVertexArray(VAO);
                 glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -430,9 +430,13 @@ void Fluid::Render(glm::mat4 view) {
             glUniform1f(glGetUniformLocation(finalPass, "texelSize"), 1.0f / WindowWidth);
             glUniform1f(glGetUniformLocation(finalPass, "normalScale"), 10.0f);
             glUniform1f(glGetUniformLocation(finalPass, "maxDepth"), maxDepth);
-            glUniform1f(glGetUniformLocation(finalPass, "absorptionCoeff"), thicknessScale);
-            glUniform1f(glGetUniformLocation(finalPass, "refractionStrength"), refractionStrenght);
-            glUniform3f(glGetUniformLocation(finalPass, "fluidColor"), fluidColor[0], fluidColor[1], fluidColor[2]);
+            glUniform1f(glGetUniformLocation(finalPass, "absorptionScale") , absorptionScale);
+            glUniform3f(glGetUniformLocation(finalPass, "absorptionCoeff"), fluidColor[0], fluidColor[1], fluidColor[2]);
+            glUniform1f(glGetUniformLocation(finalPass, "refractionStrength"), refractionStrength);
+            glUniform1f(glGetUniformLocation(finalPass, "specularStrength"), specularStrength);
+            glUniform1f(glGetUniformLocation(finalPass, "xBorder"), xBorder);
+            glUniform1f(glGetUniformLocation(finalPass, "yBorder"), yBorder);
+            glUniform1f(glGetUniformLocation(finalPass, "zBorder"), zBorder);
             glBindVertexArray(VAO);
             glDrawArrays(GL_TRIANGLES, 0, 3);
         }
@@ -531,7 +535,7 @@ void Fluid::CreateImGuiWindow() {
     if (ImGui::BeginTabBar("MyTabBar")) {
         const char* programState = paused ? "Run" : "Pause";
         const char* colorState = showDensity ? "Show speed" : "Show density";
-        const char* renderState = render ? "Disable Render" : "Render";
+        const char* renderState = render ? "Disable Render" : "Enable Render";
         ImGuiIO& io = ImGui::GetIO();
         fpsHistory[fpsOffset] = io.Framerate;
         fpsOffset = (fpsOffset + 1) % FPS_HISTORY;
@@ -570,10 +574,11 @@ void Fluid::CreateImGuiWindow() {
             ImGui::ColorEdit3("Color", fluidColor);
             ImGui::SliderInt("Blur iterations" , &blurIterations , 0 , 10);
             ImGui::SliderFloat("Blur Depth Falloff", &blurDepthFalloff , -10.2f, 10.0f);
-            ImGui::SliderFloat("Blur Radius",    &filderRadius,     1.0f, 100.0f);
+            ImGui::SliderFloat("Blur Radius",    &filterRadius,     1.0f, 100.0f);
             ImGui::SliderFloat("Blur scale", &blurScale , -10.3f, 50.5f);
-            ImGui::SliderFloat("Thickness scale", &thicknessScale , 0.0f, 0.4f);
-            ImGui::SliderFloat("refraction strenght", &refractionStrenght , -0.3f, 50.5f);
+            ImGui::SliderFloat("Absorption Scale", &absorptionScale , 0.0f, 1.0f);
+            ImGui::SliderFloat("refraction strenght", &refractionStrength , -0.3f, 50.5f);
+            ImGui::SliderFloat("Specular strenght", &specularStrength , 0.0f, 500.5f);
             if (ImGui::Button(colorState) && !render) {showDensity = !showDensity;}
             ImGui::SameLine();
             if (ImGui::Button(renderState)) {render = !render;}

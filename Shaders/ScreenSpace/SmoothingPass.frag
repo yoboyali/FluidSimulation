@@ -3,7 +3,7 @@
 uniform sampler2D Tex;
 uniform float blurScale;
 uniform float filterRadius;
-uniform vec2  blurDir;        // pass (1/width, 0) for horizontal, (0, 1/height) for vertical
+uniform vec2  blurDir;
 uniform float blurDepthFalloff;
 in vec2 texCoord;
 out float smoothedDepth;

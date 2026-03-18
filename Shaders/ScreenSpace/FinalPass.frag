@@ -9,14 +9,17 @@ uniform sampler2D Tex;
 uniform mat4  proj;
 uniform float texelSize;
 uniform float maxDepth;
-uniform float absorptionCoeff;
+uniform float absorptionScale;
+uniform vec3 absorptionCoeff;
 uniform float xBorder;
 uniform float yBorder;
 uniform float zBorder;
-
+uniform float refractionStrength;
 uniform vec3 fluidColor;
+uniform float specularStrength;
+
 vec3 boundsSize = vec3(xBorder, yBorder, zBorder);
-vec3 lightDir   = normalize(vec3(0.5, 1.0, 0.8));
+vec3 lightDir = normalize(vec3(0.5, 1.0, 1.0));
 
 const float iorAir   = 1.0;
 const float iorFluid = 1.3;
@@ -112,15 +115,25 @@ LightResponse CalculateReflectionAndRefraction(vec3 inDir, vec3 normal, float io
 }
 
 vec3 sampleEnvironment(vec3 dir) {
-    float t = dir.y * 0.5 + 0.5;
-    return mix(vec3(0.1 , 0.6 , 0.9), vec3(1.0 , 1.0 , 1.0), t);
+        vec3 envColor = vec3(
+        exp(-absorptionCoeff.x),
+        exp(-absorptionCoeff.y),
+        exp(-absorptionCoeff.z)
+        );
+        float t = dir.y;
+        return mix(envColor , envColor, t);
+
 }
 
 vec3 sampleBackground(vec2 uv) {
     return texture(backgroundTex, uv).rgb;
 }
-
+float fresnel(vec3 viewDir, vec3 normal, float ior) {
+    float r0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
+    return r0 + (1.0 - r0) * pow(1.0 - max(0.0, dot(viewDir, normal)), 5.0);
+}
 void main() {
+
     float depth = texture(Tex, texCoord).r;
     if (depth >= maxDepth) {
         FragColor = texture(backgroundTex, texCoord);
@@ -133,23 +146,30 @@ void main() {
 
     LightResponse lr = CalculateReflectionAndRefraction(-viewDir, normal, iorAir, iorFluid);
 
+
+    float specular = pow(max(0.0, dot(lr.reflectDir, lightDir)), 256.0) * specularStrength;
+
     vec3 reflectCol = sampleEnvironment(lr.reflectDir);
+    reflectCol+= vec3(specular);
 
-    float specular  = pow(max(0.0, dot(lr.reflectDir, lightDir)), 64.0);
-    //reflectCol     += vec3(specular);
+    float thickness = texture(thicknessTex , texCoord).r * absorptionScale;
 
-    vec2 refractUV  = texCoord + lr.refractDir.xy * 0.05;
+    //frensel apro
+    float fresnelWeight = fresnel(viewDir, normal, iorFluid);
+
+    vec2 refractUV  = texCoord + normal.xy * refractionStrength * texelSize;
     vec3 refractCol = sampleBackground(refractUV);
-   // vec2 refractOffset = normal.xy * refractionStrength * texelSize; // implo that bish
 
-    float thickness     = texture(thicknessTex, texCoord).r;
-   // float transmit    = exp(-thickness * absorptionCoeff);
-    vec3 color  = mix(vec3(fluidColor), vec3(fluidColor * 0.3), 1.0);
+    // Beer's law
+    vec3 transmittance = vec3(
+    exp(-thickness * absorptionCoeff.x),
+    exp(-thickness * absorptionCoeff.y),
+    exp(-thickness * absorptionCoeff.z)
+    );
+    refractCol = refractCol * transmittance;
 
-    refractCol        = mix(color, refractCol, 1.0);
+    vec3 finalColor = mix(refractCol, reflectCol, fresnelWeight);
 
-    vec3 finalColor = mix(refractCol, reflectCol, lr.reflectWeight);
-
-    FragColor = vec4(finalColor, 1.0);
+    FragColor = vec4(finalColor , 1.0);
 
 }
